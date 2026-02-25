@@ -1,0 +1,168 @@
+"""Tests for PDF organizer."""
+import pytest
+from pathlib import Path
+from lemma.core.organizer import FileOrganizer
+from lemma.db.models import Paper
+
+
+def test_organizer_initialization():
+    """Test organizer can be initialized."""
+    organizer = FileOrganizer()
+    assert organizer is not None
+
+
+def test_sanitize_filename():
+    """Test filename sanitization."""
+    organizer = FileOrganizer()
+
+    # Test with problematic characters
+    assert organizer._sanitize_filename("Test: Paper / Title") == "Test_Paper_Title"
+    assert organizer._sanitize_filename("Paper (2024)") == "Paper_2024"
+    assert organizer._sanitize_filename("Title<>|?*") == "Title"
+
+    # Test with None
+    assert organizer._sanitize_filename(None) == "unnamed"
+
+    # Test with empty string
+    assert organizer._sanitize_filename("") == "unnamed"
+
+    # Test with long name
+    long_name = "a" * 300
+    sanitized = organizer._sanitize_filename(long_name)
+    assert len(sanitized) <= 200
+
+
+def test_generate_filename_with_full_metadata():
+    """Test filename generation with complete metadata."""
+    organizer = FileOrganizer()
+
+    paper = Paper(
+        path="/test/paper.pdf",
+        file_hash="test_hash",
+        title="Machine Learning Applications",
+        authors="Smith, John; Doe, Jane",
+        year=2024,
+    )
+
+    filename = organizer._generate_filename(paper)
+
+    assert "Smith" in filename
+    assert "2024" in filename
+    assert "Machine_Learning_Applications" in filename
+    assert filename.endswith(".pdf")
+
+
+def test_generate_filename_with_partial_metadata():
+    """Test filename generation with missing metadata."""
+    organizer = FileOrganizer()
+
+    # Paper with no author
+    paper = Paper(
+        path="/test/paper.pdf",
+        file_hash="test_hash",
+        title="Test Paper",
+        year=2024,
+    )
+
+    filename = organizer._generate_filename(paper)
+    assert "Test_Paper" in filename
+    assert "2024" in filename
+
+    # Paper with no year
+    paper2 = Paper(
+        path="/test/paper2.pdf",
+        file_hash="test_hash2",
+        title="Another Paper",
+        authors="Smith",
+    )
+
+    filename2 = organizer._generate_filename(paper2)
+    assert "Smith" in filename2
+    assert "Another_Paper" in filename2
+
+
+def test_generate_filename_with_no_metadata():
+    """Test filename generation with minimal metadata."""
+    organizer = FileOrganizer()
+
+    paper = Paper(
+        path="/test/original_name.pdf",
+        file_hash="test_hash",
+    )
+
+    filename = organizer._generate_filename(paper)
+
+    # Should fall back to original filename
+    assert "original_name" in filename or "unnamed" in filename
+
+
+def test_organize_dry_run(temp_dir, sample_pdf):
+    """Test organize in dry-run mode."""
+    organizer = FileOrganizer()
+
+    papers = [
+        Paper(
+            path=str(sample_pdf),
+            file_hash="hash1",
+            title="Test Paper",
+            authors="Smith",
+            year=2024,
+        )
+    ]
+
+    # Dry run should not move files
+    original_exists = sample_pdf.exists()
+    organizer.organize(papers, temp_dir, dry_run=True)
+
+    # Original file should still exist
+    assert sample_pdf.exists() == original_exists
+
+
+def test_pattern_formats():
+    """Test different naming pattern formats."""
+    organizer = FileOrganizer()
+
+    paper = Paper(
+        path="/test/paper.pdf",
+        file_hash="test_hash",
+        title="Test Title",
+        authors="Smith, John",
+        year=2024,
+    )
+
+    # Test year-author-title pattern
+    organizer.naming_pattern = "{year}_{author}_{title}"
+    filename1 = organizer._generate_filename(paper)
+    assert filename1.startswith("2024_Smith")
+
+    # Test author-year-title pattern
+    organizer.naming_pattern = "{author}_{year}_{title}"
+    filename2 = organizer._generate_filename(paper)
+    assert filename2.startswith("Smith_2024")
+
+
+def test_handle_duplicate_filenames(temp_dir, sample_pdf):
+    """Test handling of duplicate destination filenames."""
+    organizer = FileOrganizer()
+
+    # Create a file that would conflict
+    conflict_file = temp_dir / "Smith_2024_Test_Paper.pdf"
+    conflict_file.write_bytes(b"existing content")
+
+    paper = Paper(
+        path=str(sample_pdf),
+        file_hash="test_hash",
+        title="Test Paper",
+        authors="Smith",
+        year=2024,
+    )
+
+    # Should handle the conflict gracefully (append number or skip)
+    # This tests that organize doesn't crash on conflicts
+    try:
+        organizer.organize([paper], temp_dir, dry_run=False)
+        # If it succeeds, verify original conflict file still exists
+        assert conflict_file.exists()
+    except Exception as e:
+        # Should not raise unexpected exceptions
+        pytest.fail(f"Unexpected exception: {e}")

@@ -1,0 +1,139 @@
+"""Tests for database repository."""
+import pytest
+from pathlib import Path
+from lemma.db.repository import Repository
+from lemma.db.models import Paper
+
+
+def test_repository_initialization(test_db_path):
+    """Test repository can be initialized."""
+    repo = Repository(test_db_path)
+    assert repo is not None
+
+
+def test_add_paper(test_db_path, sample_pdf):
+    """Test adding a paper to the database."""
+    repo = Repository(test_db_path)
+
+    paper = Paper(
+        path=str(sample_pdf),
+        file_hash="test_hash_123",
+        title="Test Paper",
+        authors="John Doe",
+        year=2024,
+    )
+
+    repo.add_paper(paper)
+
+    # Retrieve and verify
+    retrieved = repo.get_paper_by_hash("test_hash_123")
+    assert retrieved is not None
+    assert retrieved.title == "Test Paper"
+    assert retrieved.authors == "John Doe"
+    assert retrieved.year == 2024
+
+
+def test_get_paper_by_hash(test_db_path, sample_pdf):
+    """Test retrieving a paper by its hash."""
+    repo = Repository(test_db_path)
+
+    paper = Paper(
+        path=str(sample_pdf),
+        file_hash="unique_hash_456",
+        title="Retrieval Test",
+    )
+
+    repo.add_paper(paper)
+
+    retrieved = repo.get_paper_by_hash("unique_hash_456")
+    assert retrieved is not None
+    assert retrieved.title == "Retrieval Test"
+
+    # Non-existent hash
+    not_found = repo.get_paper_by_hash("nonexistent_hash")
+    assert not_found is None
+
+
+def test_get_all_papers(test_db_path, sample_pdf):
+    """Test retrieving all papers."""
+    repo = Repository(test_db_path)
+
+    # Add multiple papers
+    for i in range(3):
+        paper = Paper(
+            path=str(sample_pdf),
+            file_hash=f"hash_{i}",
+            title=f"Paper {i}",
+        )
+        repo.add_paper(paper)
+
+    all_papers = repo.get_all_papers()
+    assert len(all_papers) == 3
+
+
+def test_update_paper(test_db_path, sample_pdf):
+    """Test updating a paper's metadata."""
+    repo = Repository(test_db_path)
+
+    paper = Paper(
+        path=str(sample_pdf),
+        file_hash="update_test_hash",
+        title="Original Title",
+    )
+
+    repo.add_paper(paper)
+
+    # Update the paper
+    paper.title = "Updated Title"
+    paper.authors = "Jane Smith"
+    repo.update_paper(paper)
+
+    # Verify update
+    retrieved = repo.get_paper_by_hash("update_test_hash")
+    assert retrieved.title == "Updated Title"
+    assert retrieved.authors == "Jane Smith"
+
+
+def test_paper_exists(test_db_path, sample_pdf):
+    """Test checking if a paper exists by hash."""
+    repo = Repository(test_db_path)
+
+    paper = Paper(
+        path=str(sample_pdf),
+        file_hash="exists_test_hash",
+        title="Exists Test",
+    )
+
+    assert not repo.paper_exists("exists_test_hash")
+
+    repo.add_paper(paper)
+
+    assert repo.paper_exists("exists_test_hash")
+
+
+def test_get_papers_without_embeddings(test_db_path, sample_pdf):
+    """Test retrieving papers that don't have embeddings."""
+    repo = Repository(test_db_path)
+
+    # Add paper without embeddings
+    paper1 = Paper(
+        path=str(sample_pdf),
+        file_hash="no_embedding_1",
+        title="No Embedding",
+        has_embeddings=False,
+    )
+
+    # Add paper with embeddings
+    paper2 = Paper(
+        path=str(sample_pdf),
+        file_hash="has_embedding_1",
+        title="Has Embedding",
+        has_embeddings=True,
+    )
+
+    repo.add_paper(paper1)
+    repo.add_paper(paper2)
+
+    papers_without = repo.get_papers_without_embeddings()
+    assert len(papers_without) == 1
+    assert papers_without[0].file_hash == "no_embedding_1"
