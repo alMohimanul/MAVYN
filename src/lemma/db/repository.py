@@ -247,8 +247,29 @@ class Repository:
         embedding_vector: List[float],
         chunk_index: int = 0,
         model_name: str = "all-MiniLM-L6-v2",
+        chunk_hash: Optional[str] = None,
+        chunk_type: str = "paragraph",
+        section_name: Optional[str] = None,
+        importance_score: float = 0.5,
+        content_version: int = 1,
     ) -> Embedding:
-        """Store embedding for a paper chunk."""
+        """Store embedding for a paper chunk.
+
+        Args:
+            paper_id: ID of the paper this embedding belongs to
+            text_content: Text that was embedded
+            embedding_vector: The embedding vector as a list of floats
+            chunk_index: Index of this chunk in the paper
+            model_name: Name of the embedding model used
+            chunk_hash: SHA256 hash of the chunk text (for incremental updates)
+            chunk_type: Type of chunk (title, abstract, section, paragraph, etc.)
+            section_name: Name of the section this chunk belongs to
+            importance_score: Relevance weight for retrieval (0-1)
+            content_version: Paper content version when this embedding was created
+
+        Returns:
+            Created Embedding object
+        """
         with self.get_session() as session:
             embedding = Embedding(
                 paper_id=paper_id,
@@ -256,6 +277,11 @@ class Repository:
                 text_content=text_content,
                 embedding_vector=json.dumps(embedding_vector),
                 model_name=model_name,
+                chunk_hash=chunk_hash,
+                chunk_type=chunk_type,
+                section_name=section_name,
+                importance_score=importance_score,
+                content_version=content_version,
             )
             session.add(embedding)
             session.commit()
@@ -591,3 +617,333 @@ class Repository:
                 session.rollback()
                 logger.error(f"Failed to delete note {note_id}: {e}", exc_info=True)
                 return False
+
+    # Incremental embedding and versioning operations
+    def update_embedding_index(self, embedding_id: int, new_index: int) -> bool:
+        """Update the chunk_index of an existing embedding.
+
+        Args:
+            embedding_id: ID of the embedding to update
+            new_index: New chunk index value
+
+        Returns:
+            True if update successful
+        """
+        with self.get_session() as session:
+            try:
+                session.query(Embedding).filter(Embedding.id == embedding_id).update(
+                    {"chunk_index": new_index}
+                )
+                session.commit()
+                return True
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(
+                    logger, f"Failed to update embedding index {embedding_id}", e
+                )
+                return False
+
+    def invalidate_orphaned_embeddings(self, paper_id: int, valid_hashes: set) -> int:
+        """Mark embeddings as invalid if their chunk_hash is not in valid_hashes.
+
+        Args:
+            paper_id: ID of the paper
+            valid_hashes: Set of chunk hashes that are still valid
+
+        Returns:
+            Number of embeddings invalidated
+        """
+        with self.get_session() as session:
+            try:
+                # Get all embeddings for this paper
+                embeddings = (
+                    session.query(Embedding)
+                    .filter(Embedding.paper_id == paper_id)
+                    .all()
+                )
+
+                invalidated_count = 0
+                for embedding in embeddings:
+                    if (
+                        embedding.chunk_hash
+                        and embedding.chunk_hash not in valid_hashes
+                    ):
+                        embedding.is_valid = False
+                        invalidated_count += 1
+
+                session.commit()
+                logger.info(
+                    f"Invalidated {invalidated_count} orphaned embeddings for paper {paper_id}"
+                )
+                return invalidated_count
+
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(
+                    logger, f"Failed to invalidate embeddings for paper {paper_id}", e
+                )
+                return 0
+
+    def update_paper_embedding_metadata(
+        self,
+        paper_id: int,
+        content_hash: str,
+        content_version: int,
+        embedding_status: str = "completed",
+    ) -> bool:
+        """Update paper's embedding-related metadata after successful embedding.
+
+        Args:
+            paper_id: ID of the paper
+            content_hash: SHA256 hash of the content
+            content_version: New content version number
+            embedding_status: New embedding status
+
+        Returns:
+            True if update successful
+        """
+        with self.get_session() as session:
+            try:
+                from datetime import datetime
+
+                session.query(Paper).filter(Paper.id == paper_id).update(
+                    {
+                        "content_hash": content_hash,
+                        "content_version": content_version,
+                        "last_embedded_version": content_version,
+                        "last_embedded_at": datetime.utcnow(),
+                        "embedding_status": embedding_status,
+                    }
+                )
+                session.commit()
+                logger.info(f"Updated embedding metadata for paper {paper_id}")
+                return True
+
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(
+                    logger,
+                    f"Failed to update embedding metadata for paper {paper_id}",
+                    e,
+                )
+                return False
+
+    def cleanup_invalid_embeddings(self, older_than_days: int = 30) -> int:
+        """Delete invalid embeddings that are older than specified days.
+
+        Args:
+            older_than_days: Only delete invalid embeddings older than this many days
+
+        Returns:
+            Number of embeddings deleted
+        """
+        with self.get_session() as session:
+            try:
+                from datetime import datetime, timedelta
+
+                cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+
+                result = (
+                    session.query(Embedding)
+                    .filter(
+                        Embedding.is_valid.is_(False),
+                        Embedding.created_at < cutoff_date,
+                    )
+                    .delete()
+                )
+
+                session.commit()
+                logger.info(f"Cleaned up {result} invalid embeddings")
+                return result
+
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(logger, "Failed to cleanup invalid embeddings", e)
+                return 0
+
+    def get_papers_needing_update(self, force: bool = False) -> List[Paper]:
+        """Get papers that need embedding updates based on version tracking.
+
+        Args:
+            force: If True, return all papers regardless of version
+
+        Returns:
+            List of Paper objects needing updates
+        """
+        with self.get_session() as session:
+            if force:
+                return session.query(Paper).all()
+
+            # Papers where content_version > last_embedded_version
+            # or where no embeddings exist
+            return (
+                session.query(Paper)
+                .filter(
+                    or_(
+                        Paper.embedding_status == "pending",
+                        Paper.embedding_status == "failed",
+                        Paper.embedding_status.is_(None),
+                        Paper.content_version > Paper.last_embedded_version,
+                        Paper.last_embedded_version.is_(None),
+                    )
+                )
+                .all()
+            )
+
+    def get_embedding_coverage_stats(self) -> Dict[str, Any]:
+        """Get statistics about embedding coverage across all papers.
+
+        Returns:
+            Dictionary with coverage statistics
+        """
+        with self.get_session() as session:
+            total_papers = session.query(Paper).count()
+            embedded_papers = (
+                session.query(Paper)
+                .filter(Paper.embedding_status == "completed")
+                .count()
+            )
+            pending_papers = (
+                session.query(Paper)
+                .filter(
+                    or_(
+                        Paper.embedding_status == "pending",
+                        Paper.embedding_status.is_(None),
+                    )
+                )
+                .count()
+            )
+            failed_papers = (
+                session.query(Paper).filter(Paper.embedding_status == "failed").count()
+            )
+
+            # Papers needing updates (version mismatch)
+            outdated_papers = (
+                session.query(Paper)
+                .filter(
+                    Paper.content_version > Paper.last_embedded_version,
+                    Paper.embedding_status == "completed",
+                )
+                .count()
+            )
+
+            total_embeddings = session.query(Embedding).count()
+            valid_embeddings = (
+                session.query(Embedding).filter(Embedding.is_valid.is_(True)).count()
+            )
+
+            return {
+                "total_papers": total_papers,
+                "embedded_papers": embedded_papers,
+                "pending_papers": pending_papers,
+                "failed_papers": failed_papers,
+                "outdated_papers": outdated_papers,
+                "total_embeddings": total_embeddings,
+                "valid_embeddings": valid_embeddings,
+                "invalid_embeddings": total_embeddings - valid_embeddings,
+                "coverage_pct": (embedded_papers / total_papers * 100)
+                if total_papers > 0
+                else 0,
+            }
+
+    # Sync and watch directory operations
+    def add_watched_directory(self, directory: str) -> bool:
+        """Add a directory to the list of watched directories.
+
+        Args:
+            directory: Directory path to watch
+
+        Returns:
+            True if added successfully
+        """
+        try:
+            watched = self.get_config("watched_directories", [])
+
+            if isinstance(watched, str):
+                watched = [watched]
+
+            if directory not in watched:
+                watched.append(directory)
+                self.set_config("watched_directories", watched)
+                logger.info(f"Added watched directory: {directory}")
+
+            return True
+
+        except Exception as e:
+            log_exception(logger, f"Failed to add watched directory {directory}", e)
+            return False
+
+    def remove_watched_directory(self, directory: str) -> bool:
+        """Remove a directory from the list of watched directories.
+
+        Args:
+            directory: Directory path to remove
+
+        Returns:
+            True if removed successfully
+        """
+        try:
+            watched = self.get_config("watched_directories", [])
+
+            if isinstance(watched, str):
+                watched = [watched]
+
+            if directory in watched:
+                watched.remove(directory)
+                self.set_config("watched_directories", watched)
+                logger.info(f"Removed watched directory: {directory}")
+
+            return True
+
+        except Exception as e:
+            log_exception(logger, f"Failed to remove watched directory {directory}", e)
+            return False
+
+    def get_watched_directories(self) -> List[str]:
+        """Get list of all watched directories.
+
+        Returns:
+            List of directory paths
+        """
+        watched = self.get_config("watched_directories", [])
+
+        if isinstance(watched, str):
+            return [watched]
+
+        return watched if isinstance(watched, list) else []
+
+    def update_sync_stats(self, directory: str, stats: Dict[str, Any]) -> bool:
+        """Update sync statistics for a directory.
+
+        Args:
+            directory: Directory that was synced
+            stats: Statistics dictionary
+
+        Returns:
+            True if updated successfully
+        """
+        try:
+            from datetime import datetime
+
+            sync_data = {
+                "last_sync": datetime.utcnow().isoformat(),
+                "directory": directory,
+                **stats,
+            }
+
+            self.set_config("last_sync_stats", sync_data)
+            logger.info(f"Updated sync stats for {directory}")
+
+            return True
+
+        except Exception as e:
+            log_exception(logger, "Failed to update sync stats", e)
+            return False
+
+    def get_sync_stats(self) -> Optional[Dict[str, Any]]:
+        """Get the most recent sync statistics.
+
+        Returns:
+            Dictionary with sync stats or None
+        """
+        return self.get_config("last_sync_stats")

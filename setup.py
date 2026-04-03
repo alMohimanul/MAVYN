@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="lemma-ai",
-    version="0.1.0",
+    version="2.0.0",
     author="Mahir",
     author_email="aislam192054@gmail.com",
     description="Local-first paper manager with semantic search and LLM reasoning",
@@ -16,7 +16,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 3 - Beta",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: MIT License",
