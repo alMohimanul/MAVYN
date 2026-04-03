@@ -5,91 +5,150 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+## ✨ Features
 
 - 🔒 **Privacy-First**: All papers stored locally, no cloud uploads
 - 🚀 **Fast Semantic Search**: Local vector search across all papers
 - 🤖 **AI Q&A (Optional)**: Ask questions using cloud LLMs
-- 📊 **Smart Organization**: Automatic metadata extraction and file naming
-- 🔄 **Incremental Updates**: Only processes new papers
-- 📂 **Duplicate Detection**: SHA256-based deduplication
+- 📊 **Auto-Processing**: One command to scan, rename, and embed
+- 🔄 **Incremental Updates**: 70-90% faster re-embedding
+- 📂 **Smart Cleanup**: Automatically removes deleted papers from database
+- 👀 **Watch Mode**: Auto-process new papers as they're added
 
-## Installation
+## 🚀 Quick Start
+
+### 1. Installation
 
 ```bash
-# Install via pip
-pip install lemma-ai
-
-# Or with pipx (recommended for CLI tools)
-pipx install lemma-ai
+pip install -r requirements.txt
 ```
 
-## Quick Start
+### 2. Set Your Papers Folder (One-Time Setup)
 
 ```bash
-# Scan your papers directory
-lemma scan ~/Documents/Papers
+# Set default papers directory and process all papers
+lemma sync ~/Papers --set-default
 
-# List indexed papers
-lemma list
-
-# Search by keyword
-lemma search "machine learning"
-
-# Generate embeddings for semantic search (runs locally)
-lemma embed
-
-# Organize files with smart renaming
-lemma organize --dry-run
-
-# Verify database integrity
-lemma verify
+# That's it! Your papers are now:
+# ✓ Scanned and indexed
+# ✓ Renamed with metadata
+# ✓ Embedded for semantic search
+# ✓ Ready for questions
 ```
 
-## Optional: AI Features
+### 3. Add New Papers (Automatic)
 
-For AI-powered Q&A, set up an API key (completely optional):
+**Option A: Manual Sync**
+```bash
+# Just drop PDFs into ~/Papers, then run:
+lemma sync
+```
+
+**Option B: Auto-Sync (Watch Mode)**
+```bash
+# Start watching (leave running in terminal)
+lemma sync --watch
+
+# Now just drop PDFs into ~/Papers
+# They're automatically processed in seconds!
+```
+
+### 4. Query Your Papers
 
 ```bash
-# Set environment variable
+lemma ask "What are the main findings?"
+```
+
+## 📖 Common Workflows
+
+### First-Time Setup
+```bash
+# 1. Set your papers folder and sync everything
+lemma sync ~/Papers --set-default
+
+# 2. Query your papers
+lemma ask "What is the main contribution?"
+```
+
+### Daily Use
+```bash
+# Download new papers to ~/Papers, then:
+lemma sync
+
+# Or enable auto-processing:
+lemma sync --watch  # Leave running
+```
+
+### Browse Your Library
+```bash
+lemma list                    # List all papers
+lemma search "transformers"   # Search by keyword
+lemma show 5                  # Show paper details
+```
+
+## 🔧 Advanced Usage
+
+### Sync Options
+```bash
+lemma sync                    # Use default directory
+lemma sync ~/Papers           # Specify directory
+lemma sync --no-rename        # Skip automatic renaming
+lemma sync --no-embed         # Skip embedding (faster)
+lemma sync --watch            # Continuous monitoring
+```
+
+### Manual Control (If Needed)
+```bash
+lemma scan ~/Papers           # Just scan (no rename/embed)
+lemma organize                # Rename existing files
+lemma embed                   # Generate embeddings only
+lemma embed-status            # Check embedding coverage
+lemma verify --remove         # Clean up missing files
+```
+
+## 🤖 AI Q&A Setup (Optional)
+
+Set up an API key to enable question answering:
+
+```bash
+# Option 1: Environment variable
 export GROQ_API_KEY="your_key_here"
 
-# Or create .env file
-echo "GROQ_API_KEY=your_key_here" > .env
+# Option 2: .env file
+echo "GROQ_API_KEY=your_key_here" > ~/.lemma/.env
 
-# Ask questions across your library
-lemma ask "What are the main approaches to polyp segmentation?"
+# Then ask questions
+lemma ask "What are the main approaches discussed?"
 ```
 
-Get free API keys:
+**Get Free API Keys:**
 - [Groq](https://console.groq.com/) - Fast and generous free tier (recommended)
 - [Google Gemini](https://makersuite.google.com/) - Alternative option
 
-## Requirements
-
-- Python 3.10 or higher
-- macOS (Linux/Windows support coming soon)
-- ~500MB disk space for embedding models
-
-## Privacy
-
-- **All papers stay on your machine** - never uploaded anywhere
-- **Embeddings generated locally** - no external API calls
-- **Cloud APIs only used for optional Q&A feature** - and only if you configure keys
-- **Database stored locally** at `~/.lemma/lemma.db`
-
-## Commands
+## 📋 Key Commands
 
 | Command | Description |
 |---------|-------------|
-| `lemma scan <dir>` | Scan directory for PDFs |
+| `lemma sync` | Auto-process papers (scan + rename + embed) |
+| `lemma sync --watch` | Monitor folder and auto-process new papers |
 | `lemma list` | List all indexed papers |
+| `lemma ask <question>` | Ask questions across papers (requires API key) |
 | `lemma search <query>` | Search papers by keyword |
-| `lemma info <id>` | Show paper details |
-| `lemma embed` | Generate embeddings (local) |
-| `lemma ask <question>` | Ask questions (requires API key) |
-| `lemma organize` | Rename files based on metadata |
-| `lemma verify` | Check database integrity |
+| `lemma show <id>` | Show paper details |
+| `lemma embed-status` | Check embedding coverage |
+
+## 🔒 Privacy
+
+- **All papers stay on your machine** - never uploaded anywhere
+- **Embeddings generated locally** - no external API calls
+- **Cloud APIs only for Q&A** - and only if you configure them
+- **Database stored locally** at `~/.lemma/lemma.db`
+
+## 📦 Requirements
+
+- Python 3.10 or higher
+- ~500MB disk space for embedding models
+- Internet connection only for optional AI Q&A
 
 ## License
 

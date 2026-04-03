@@ -43,6 +43,14 @@ class Paper(Base):
         String(32), default="pending"
     )  # pending, processing, completed, failed
 
+    # Incremental embedding version tracking
+    content_hash = Column(String(64), index=True)  # SHA256 of extracted full text
+    content_version = Column(
+        Integer, default=1, nullable=False
+    )  # Increments on text changes
+    last_embedded_version = Column(Integer)  # Version when embeddings were last created
+    last_embedded_at = Column(DateTime)  # Timestamp of last embedding operation
+
     # Relationships
     embeddings = relationship(
         "Embedding", back_populates="paper", cascade="all, delete-orphan"
@@ -71,9 +79,33 @@ class Embedding(Base):
     model_name = Column(String(128), default="all-MiniLM-L6-v2")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Incremental embedding and advanced chunking metadata
+    content_version = Column(
+        Integer, default=1, nullable=False
+    )  # Paper version when created
+    chunk_hash = Column(
+        String(64), index=True
+    )  # SHA256 of chunk text for reuse detection
+    chunk_type = Column(
+        String(32), default="paragraph"
+    )  # title, abstract, section, paragraph, etc.
+    section_name = Column(
+        String(256)
+    )  # Section this chunk belongs to (e.g., "Introduction")
+    importance_score = Column(
+        Float, default=0.5
+    )  # Relevance weight for retrieval (0-1)
+    is_valid = Column(
+        Boolean, default=True, index=True
+    )  # False if chunk is orphaned/outdated
+
     paper = relationship("Paper", back_populates="embeddings")
 
-    __table_args__ = (Index("idx_paper_chunk", "paper_id", "chunk_index"),)
+    __table_args__ = (
+        Index("idx_paper_chunk", "paper_id", "chunk_index"),
+        Index("idx_chunk_hash", "chunk_hash"),
+        Index("idx_valid", "is_valid"),
+    )
 
 
 class Citation(Base):

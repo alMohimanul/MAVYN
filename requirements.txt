@@ -9,6 +9,9 @@ pdfplumber>=0.11.0
 sentence-transformers>=2.3.0
 faiss-cpu>=1.7.4
 
+# Natural Language Processing (for advanced chunking)
+nltk>=3.8.0
+
 # Database
 sqlalchemy>=2.0.0
 
@@ -22,3 +25,4 @@ rich>=13.7.0
 
 # Utilities
 python-dotenv>=1.0.0
+watchdog>=3.0.0
