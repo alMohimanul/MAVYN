@@ -1,4 +1,6 @@
-# 📚 MAVYN - Your AI Research Assistant
+<img width="1529" height="704" alt="mavyn" src="https://github.com/user-attachments/assets/a77adb6c-ed25-4499-a1d4-3607187e4aa0" />
+
+# MAVYN - Your AI Research Assistant
 
 > A privacy-first research paper manager with natural language interface and local semantic search.
 
