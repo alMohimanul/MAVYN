@@ -1,4 +1,4 @@
-"""Input validation utilities for lemma."""
+"""Input validation utilities for MAVYN."""
 from pathlib import Path
 from typing import List, Optional
 import click

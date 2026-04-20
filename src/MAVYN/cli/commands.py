@@ -15,15 +15,15 @@ from ..db.repository import Repository
 from . import output
 from .setup_wizard import run_setup_wizard, is_first_run
 
-# Load environment variables from .env file and ~/.lemma/.env
+# Load environment variables from .env file and ~/.MAVYN/.env
 load_dotenv()  # Load from current directory
-load_dotenv(Path.home() / ".lemma" / ".env")  # Load from config directory
+load_dotenv(Path.home() / ".MAVYN" / ".env")  # Load from config directory
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version="2.0.0")
 def cli():
-    """lemma - Local-first paper manager.
+    """MAVYN - Local-first paper manager.
 
     Manage your research papers with local semantic search and cloud LLM reasoning.
     """
@@ -35,7 +35,7 @@ def cli():
     "directory", type=click.Path(exists=True, file_okay=False, path_type=Path)
 )
 @click.option("--recursive/--no-recursive", default=True, help="Scan subdirectories")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def scan(directory: Path, recursive: bool, db: str):
     """Scan a directory for PDF files and add them to the database.
 
@@ -121,7 +121,7 @@ def scan(directory: Path, recursive: bool, db: str):
     default="indexed_at",
     help="Sort by field",
 )
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def list_papers(limit: int, offset: int, sort_by: str, db: str):
     """List indexed papers."""
     with Repository(db) as repo:
@@ -145,7 +145,7 @@ def list_papers(limit: int, offset: int, sort_by: str, db: str):
 
 @cli.command()
 @click.argument("query")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def search(query: str, db: str):
     """Search papers by keyword (title, authors, abstract).
 
@@ -174,7 +174,7 @@ def search(query: str, db: str):
 @click.argument("item_id", type=int, required=False)
 @click.option("--paper", "-p", type=int, help="Show paper by ID")
 @click.option("--note", "-n", type=int, help="Show note by ID")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def show(item_id: int, paper: int, note: int, db: str):
     """Show detailed information about a paper or note.
 
@@ -275,7 +275,7 @@ def show(item_id: int, paper: int, note: int, db: str):
 # Keep 'info' as alias for backwards compatibility
 @cli.command(name="info", hidden=True)
 @click.argument("paper_id", type=int)
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def info(paper_id: int, db: str):
     """Show detailed information about a paper (alias for 'show')."""
     with Repository(db) as repo:
@@ -308,9 +308,9 @@ def info(paper_id: int, db: str):
 
 @cli.command()
 @click.argument("question")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option("--top-k", type=int, default=5, help="Number of papers to retrieve")
-@click.option("--index-path", default="~/.lemma/search.index", help="FAISS index path")
+@click.option("--index-path", default="~/.MAVYN/search.index", help="FAISS index path")
 @click.option("--save", "-s", is_flag=True, help="Automatically save answer as a note")
 @click.option(
     "--arxiv",
@@ -324,7 +324,7 @@ def info(paper_id: int, db: str):
     "no_arxiv_cli",
     is_flag=True,
     default=False,
-    help="Do not query arXiv even if LEMMA_ARXIV_RELATED=1 is set.",
+    help="Do not query arXiv even if MAVYN_ARXIV_RELATED=1 is set.",
 )
 def ask(
     question: str,
@@ -452,7 +452,7 @@ def ask(
                 return
 
         use_arxiv = (
-            arxiv_cli or os.environ.get("LEMMA_ARXIV_RELATED", "").strip() == "1"
+            arxiv_cli or os.environ.get("MAVYN_ARXIV_RELATED", "").strip() == "1"
         ) and not no_arxiv_cli
 
         if wants_similar_papers(question):
@@ -485,7 +485,7 @@ def ask(
             if not has_index and not use_arxiv:
                 output.print_error(
                     "Similar-papers questions need a FAISS index (run 'lemma embed') "
-                    "or enable arXiv with --arxiv or LEMMA_ARXIV_RELATED=1."
+                    "or enable arXiv with --arxiv or MAVYN_ARXIV_RELATED=1."
                 )
                 return
 
@@ -706,7 +706,7 @@ def ask(
                     _save_note_from_session(repo, session_data)
                 else:
                     output.print_info(
-                        "\n💡 Tip: Save this answer as a note with 'lemma ask ... --save' or 'lemma note save'"
+                        "\n💡 Tip: Answers are automatically saved in your session"
                     )
             except Exception as e:
                 output.print_error(f"Failed to generate answer: {e}")
@@ -945,7 +945,7 @@ def ask(
                 _save_note_from_session(repo, session_data)
             else:
                 output.print_info(
-                    "\n💡 Tip: Save this answer as a note with 'lemma ask ... --save' or 'lemma note save'"
+                    "\n💡 Tip: Answers are automatically saved in your session"
                 )
 
         except Exception as e:
@@ -966,7 +966,7 @@ def ask(
 
 
 @cli.command(name="notes")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option("--limit", type=int, default=20, help="Number of notes to show")
 def notes_list(db: str, limit: int):
     """List all saved notes (shortcut for note list)."""
@@ -988,11 +988,11 @@ def notes_list(db: str, limit: int):
 
 
 @cli.command()
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option(
     "--force", is_flag=True, help="Re-embed papers that already have embeddings"
 )
-@click.option("--index-path", default="~/.lemma/search.index", help="FAISS index path")
+@click.option("--index-path", default="~/.MAVYN/search.index", help="FAISS index path")
 @click.option(
     "--checkpoint-every",
     type=int,
@@ -1256,11 +1256,13 @@ def embed(
             )
 
         if success_count > 0:
-            output.print_success("You can now use 'lemma ask' to query your papers!")
+            output.print_success(
+                "Embeddings complete! You can now ask questions about your papers."
+            )
 
 
 @cli.command(name="embed-status")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def embed_status(db: str):
     """Show embedding coverage and version status for all papers.
 
@@ -1355,7 +1357,7 @@ def embed_status(db: str):
 
 
 @cli.command()
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be renamed without doing it"
 )
@@ -1555,7 +1557,7 @@ def setup():
 
 
 @cli.command()
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def migrate(db: str):
     """Migrate database to support incremental embeddings and advanced chunking.
 
@@ -1608,7 +1610,7 @@ def migrate(db: str):
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     required=False,
 )
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option(
     "--watch", is_flag=True, help="Continuously monitor directory for new papers"
 )
@@ -1632,7 +1634,7 @@ def migrate(db: str):
     default="hybrid",
     help="Chunking strategy for embeddings",
 )
-@click.option("--index-path", default="~/.lemma/search.index", help="FAISS index path")
+@click.option("--index-path", default="~/.MAVYN/search.index", help="FAISS index path")
 @click.option(
     "--scan-interval",
     type=int,
@@ -1695,21 +1697,15 @@ def sync(
                     directory = Path(last_stats["directory"])
                     output.print_info(f"📂 Using last synced directory: {directory}")
                     output.print_info(
-                        f"💡 Tip: Run 'lemma sync {directory} --set-default' to set as default"
+                        "💡 Tip: Use /sync to process papers from this directory"
                     )
                 else:
                     output.print_error("❌ No directory specified")
                     output.print_info("\nFirst-time setup:")
                     output.print_info(
-                        "  lemma sync ~/Papers              # Process papers once"
+                        "  /sync ~/Papers              # Process your papers"
                     )
-                    output.print_info(
-                        "  lemma sync ~/Papers --set-default  # Set as default directory"
-                    )
-                    output.print_info("\nThen you can just run:")
-                    output.print_info(
-                        "  lemma sync                       # Uses default directory"
-                    )
+                    output.print_info("\nThen use /list and ask questions naturally!")
                     return
 
         directory = Path(directory).expanduser().resolve()
@@ -1725,7 +1721,7 @@ def sync(
                 f"[green]Set default papers directory:[/green] {directory}"
             )
             output.console.print(
-                "[blue]You can now run 'lemma sync' without specifying a directory[/blue]\n"
+                "[blue]You can now use /sync to add new papers from this directory[/blue]\n"
             )
 
         # Initialize orchestrator
@@ -1900,11 +1896,11 @@ def sync(
                 if results["success"] > 0:
                     if results["embedded"] > 0:
                         output.console.print(
-                            "[green]Ready! Use 'lemma ask <question>' to query your papers[/green]"
+                            "[green]Ready! Type /list to see your papers, then ask questions naturally[/green]"
                         )
                     elif no_embed:
                         output.console.print(
-                            "[yellow]Run 'lemma embed' to enable semantic search[/yellow]"
+                            "[yellow]Papers indexed but not embedded - questions may be limited[/yellow]"
                         )
 
                 if results["failed"] > 0:
@@ -1920,22 +1916,18 @@ def sync(
                     output.console.print()
                     if not default_dir or str(directory) != default_dir:
                         output.console.print(
-                            "[blue]💡 Tip: Set this as your default papers folder:[/blue]"
+                            "[blue]💡 Tip: Use /sync again to add new papers[/blue]"
                         )
-                        output.console.print(
-                            f"  [cyan]lemma sync {directory} --set-default[/cyan]"
-                        )
-                        output.console.print("  [dim]Then just run: lemma sync[/dim]")
                     else:
                         output.console.print("[blue]💡 Quick commands:[/blue]")
                         output.console.print(
-                            "  [cyan]lemma sync[/cyan]              # Sync new papers"
+                            "  [cyan]/list[/cyan]                   # View your papers"
                         )
                         output.console.print(
-                            "  [cyan]lemma sync --watch[/cyan]      # Auto-process new papers"
+                            "  [cyan]/sync --watch[/cyan]           # Auto-process new papers"
                         )
                         output.console.print(
-                            "  [cyan]lemma ask <question>[/cyan]    # Query your papers"
+                            "  [cyan]Ask naturally![/cyan]          # e.g., 'tell me about paper 5'"
                         )
 
             except Exception as e:
@@ -1943,7 +1935,7 @@ def sync(
 
 
 @cli.command()
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option(
     "--remove", is_flag=True, help="Remove stale entries (default: just report)"
 )
@@ -2182,7 +2174,7 @@ def note():
 
 
 @note.command(name="save")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def note_save(db: str):
     """Save the last Q&A session as a formatted note.
 
@@ -2298,7 +2290,7 @@ def note_save(db: str):
 
 
 @note.command(name="list")
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 @click.option("--limit", type=int, default=20, help="Number of notes to show")
 def note_list(db: str, limit: int):
     """List all saved notes."""
@@ -2321,7 +2313,7 @@ def note_list(db: str, limit: int):
 
 @note.command(name="show")
 @click.argument("note_id", type=int)
-@click.option("--db", default="~/.lemma/lemma.db", help="Database path")
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
 def note_show(note_id: int, db: str):
     """Show a specific note by ID.
 
@@ -2377,13 +2369,50 @@ def note_show(note_id: int, db: str):
         )
 
 
+# Wrapper functions for REPL use
+def sync_command(**kwargs):
+    """Wrapper for sync command to be called from REPL."""
+    # Build arguments
+    args = []
+    if kwargs.get("directory"):
+        args.append(str(kwargs["directory"]))
+    if kwargs.get("watch"):
+        args.append("--watch")
+    if kwargs.get("set_default"):
+        args.append("--set-default")
+    if kwargs.get("no_rename"):
+        args.append("--no-rename")
+    if kwargs.get("no_embed"):
+        args.append("--no-embed")
+    # Call sync directly
+    sync.callback(**kwargs)
+
+
+def list_papers_command(**kwargs):
+    """Wrapper for list command to be called from REPL."""
+    list_papers.callback(**kwargs)
+
+
+def ask_command(**kwargs):
+    """Wrapper for ask command to be called from REPL."""
+    ask.callback(**kwargs)
+
+
 def main():
     """Entry point for the CLI."""
+    import sys
+
     # Run first-time setup wizard if needed
     if is_first_run():
         run_setup_wizard(skip_if_configured=True)
 
-    cli()
+    # If no arguments provided, start REPL
+    if len(sys.argv) == 1:
+        from .repl import start_repl
+
+        start_repl(db_path="~/.MAVYN/MAVYN.db")
+    else:
+        cli()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-# 📚 Lemma - Local-First Research Paper Manager
+# 📚 MAVYN - Your AI Research Assistant
 
-> A privacy-first research paper manager with local semantic search and optional AI-powered insights.
+> A privacy-first research paper manager with natural language interface and local semantic search.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,14 +8,14 @@
 ## ✨ Features
 
 - 🔒 **Privacy-First**: All papers stored locally, no cloud uploads
+- 💬 **Natural Language Interface**: Interactive REPL - just chat with your papers
 - 🚀 **Fast Semantic Search**: Local vector search across all papers
-- 🤖 **AI Q&A (Optional)**: Ask questions using cloud LLMs
-- 📊 **Paper Comparison**: Compare multiple papers side-by-side with intelligent caching
-- 🔗 **Similar papers**: Ask for related work in your library; optional arXiv suggestions (`--arxiv` or `LEMMA_ARXIV_RELATED=1`)
+- 🤖 **AI Q&A**: Ask questions naturally without command prefixes
+- 📊 **Paper Comparison**: Compare multiple papers with intelligent caching
+- 🔗 **Similar Papers**: Find related work in your library with optional arXiv suggestions
 - 📈 **Auto-Processing**: One command to scan, rename, and embed
 - 🔄 **Incremental Updates**: 70-90% faster re-embedding
 - 📂 **Smart Cleanup**: Automatically removes deleted papers from database
-- 👀 **Watch Mode**: Auto-process new papers as they're added
 
 ## 🚀 Quick Start
 
@@ -25,134 +25,136 @@
 pip install -r requirements.txt
 ```
 
-### 2. Set Your Papers Folder (One-Time Setup)
+### 2. Start MAVYN
 
 ```bash
-# Set default papers directory and process all papers
-lemma sync ~/Papers --set-default
+mavyn
+```
 
-# That's it! Your papers are now:
+This launches the interactive assistant.
+
+### 3. Initial Setup
+
+```
+MAVYN> /sync ~/Papers
+
+# Your papers are now:
 # ✓ Scanned and indexed
 # ✓ Renamed with metadata
 # ✓ Embedded for semantic search
 # ✓ Ready for questions
 ```
 
-### 3. Add New Papers (Automatic)
+### 4. List Your Papers
 
-**Option A: Manual Sync**
-```bash
-# Just drop PDFs into ~/Papers, then run:
-lemma sync
+```
+MAVYN> /list
+
+# Shows numbered list of all papers
 ```
 
-**Option B: Auto-Sync (Watch Mode)**
-```bash
-# Start watching (leave running in terminal)
-lemma sync --watch
+### 5. Ask Questions Naturally
 
-# Now just drop PDFs into ~/Papers
-# They're automatically processed in seconds!
+```
+MAVYN> tell me the methodology summary of paper 4
+
+MAVYN> compare papers 1 and 5
+
+MAVYN> find similar papers about transformers
+
+MAVYN> what are the main findings in paper 7?
 ```
 
-### 4. Query Your Papers
+**No command prefixes needed!** Just type your question naturally.
 
-```bash
-# Ask questions
-lemma ask "What are the main findings?"
-
-# Compare papers (NEW!)
-lemma ask "Compare papers 1 and 5"
-lemma ask "Compare the methodology in papers [2], [7], and [12]"
-```
-
-## 📖 Common Workflows
+## 📖 Complete Workflow
 
 ### First-Time Setup
-```bash
-# 1. Set your papers folder and sync everything
-lemma sync ~/Papers --set-default
+```
+$ mavyn
 
-# 2. Query your papers
-lemma ask "What is the main contribution?"
+MAVYN> /sync ~/Papers
+
+# MAVYN will:
+# 1. Scan all PDFs in ~/Papers
+# 2. Extract metadata (title, authors, year, etc.)
+# 3. Rename files for easy identification
+# 4. Generate embeddings for semantic search
 ```
 
 ### Daily Use
-```bash
-# Download new papers to ~/Papers, then:
-lemma sync
+```
+$ mavyn
 
-# Or enable auto-processing:
-lemma sync --watch  # Leave running
+MAVYN> /list
+# See all your papers with IDs
+
+MAVYN> what is the main contribution of paper 5?
+# Get AI-powered summaries
+
+MAVYN> compare the methodology in papers 2 and 7
+# Side-by-side comparisons
+
+MAVYN> find papers similar to paper 3
+# Discover related work
+
+MAVYN> /exit
+# Exit when done
 ```
 
-### Browse Your Library
-```bash
-lemma list                    # List all papers
-lemma search "transformers"   # Search by keyword
-lemma show 5                  # Show paper details
+### Auto-Sync New Papers
+```
+MAVYN> /sync ~/Papers --watch
+
+# Now just drop new PDFs into ~/Papers
+# They'll be automatically processed!
 ```
 
-## 🔧 Advanced Usage
+## 🔧 Available Commands
 
-### Sync Options
-```bash
-lemma sync                    # Use default directory
-lemma sync ~/Papers           # Specify directory
-lemma sync --no-rename        # Skip automatic renaming
-lemma sync --no-embed         # Skip embedding (faster)
-lemma sync --watch            # Continuous monitoring
-```
+### Slash Commands
+- `/sync [directory]` - Setup and sync your papers
+- `/sync --watch` - Continuously monitor for new papers
+- `/list` - List all indexed papers with IDs
+- `/help` - Show help message
+- `/exit` - Exit MAVYN
 
-### Manual Control (If Needed)
-```bash
-lemma scan ~/Papers           # Just scan (no rename/embed)
-lemma organize                # Rename existing files
-lemma embed                   # Generate embeddings only
-lemma embed-status            # Check embedding coverage
-lemma verify --remove         # Clean up missing files
-```
+### Natural Language Queries
+No special syntax needed! Just ask naturally:
+- "tell me about paper 5"
+- "summarize the methodology of paper 3"
+- "compare papers 1, 4, and 7"
+- "find papers similar to paper 2"
+- "what are the key contributions in paper 6?"
 
 ## 🤖 AI Q&A Setup (Optional)
 
-Set up an API key to enable question answering:
+Set up an API key to enable AI-powered question answering:
 
 ```bash
 # Option 1: Environment variable
 export GROQ_API_KEY="your_key_here"
 
 # Option 2: .env file
-echo "GROQ_API_KEY=your_key_here" > ~/.lemma/.env
-
-# Then ask questions
-lemma ask "What are the main approaches discussed?"
+echo "GROQ_API_KEY=your_key_here" > ~/.MAVYN/.env
 ```
 
 **Get Free API Keys:**
 - [Groq](https://console.groq.com/) - Fast and generous free tier (recommended)
 - [Google Gemini](https://makersuite.google.com/) - Alternative option
 
-## 📋 Key Commands
-
-| Command | Description |
-|---------|-------------|
-| `lemma sync` | Auto-process papers (scan + rename + embed) |
-| `lemma sync --watch` | Monitor folder and auto-process new papers |
-| `lemma list` | List all indexed papers |
-| `lemma ask <question>` | Ask questions across papers (requires API key) |
-| `lemma ask "Compare papers X and Y"` | Compare multiple papers side-by-side |
-| `lemma ask "Similar papers on …"` | Related papers in your library; add `--arxiv` for arXiv API suggestions |
-| `lemma search <query>` | Search papers by keyword |
-| `lemma show <id>` | Show paper details |
-| `lemma embed-status` | Check embedding coverage |
+Without API keys, MAVYN will still:
+- Index and search papers
+- Show relevant papers for your queries
+- Perform all local operations
 
 ## 🔒 Privacy
 
 - **All papers stay on your machine** - never uploaded anywhere
 - **Embeddings generated locally** - no external API calls
 - **Cloud APIs only for Q&A** - and only if you configure them
-- **Similar papers + arXiv (optional)** - If you run `lemma ask "…similar…" --arxiv` or set `LEMMA_ARXIV_RELATED=1`, Lemma sends a **keyword search query** (derived from your question or seed paper title/abstract) to **export.arxiv.org**. No PDFs are uploaded. Responses are cached locally in `lemma.db` for 24 hours to reduce repeat traffic.
-- **Database stored locally** at `~/.lemma/lemma.db`
+- **Similar papers + arXiv (optional)** - If enabled, MAVYN sends a **keyword search query** (derived from your question or seed paper title/abstract) to **export.arxiv.org**. No PDFs are uploaded. Responses are cached locally for 24 hours.
+- **Database stored locally** at `~/.MAVYN/MAVYN.db`
 
 ## 📦 Requirements
 
@@ -160,11 +162,106 @@ lemma ask "What are the main approaches discussed?"
 - ~500MB disk space for embedding models
 - Internet connection only for optional AI Q&A and optional arXiv similar-paper search
 
-## License
+## 🎯 Example Session
+
+```
+$ mavyn
+
+Welcome to MAVYN - Your AI Research Assistant
+
+Available Commands:
+- /sync [directory] - Setup and sync your papers
+- /list - List all indexed papers
+- /help - Show help message
+- /exit - Exit MAVYN
+
+Natural Language Queries:
+Just type your question naturally!
+
+MAVYN> /sync ~/Documents/Papers
+📂 Scanning: /Users/you/Documents/Papers
+✓ paper1.pdf [renamed] [embedded]
+✓ paper2.pdf [renamed] [embedded]
+✓ paper3.pdf [renamed] [embedded]
+
+Sync Summary
+────────────
+Total files: 3
+New papers: 3
+Embedded: 3
+
+MAVYN> /list
+┌────┬──────────────────────────────────────┬────────────┬──────┐
+│ ID │ Title                                │ Authors    │ Year │
+├────┼──────────────────────────────────────┼────────────┼──────┤
+│ 1  │ Attention Is All You Need            │ Vaswani et │ 2017 │
+│ 2  │ BERT: Pre-training of Deep Bidirect  │ Devlin et  │ 2018 │
+│ 3  │ GPT-3: Language Models are Few-Shot  │ Brown et a │ 2020 │
+└────┴──────────────────────────────────────┴────────────┴──────┘
+
+MAVYN> tell me about the methodology in paper 1
+
+[AI generates detailed methodology summary...]
+
+MAVYN> compare papers 1 and 2
+
+[AI generates side-by-side comparison...]
+
+MAVYN> /exit
+Goodbye!
+```
+
+## 🛠️ Advanced Features
+
+### Incremental Updates
+MAVYN is smart about re-processing papers:
+- Only embeds new or modified papers
+- Reuses unchanged content chunks
+- 70-90% faster when updating existing papers
+
+### Paper Comparison Caching
+When you compare papers, results are cached:
+- Instant results for repeat comparisons
+- Reduces API costs
+- Cached for 24 hours
+
+### arXiv Integration
+Find related papers beyond your library:
+- Set `MAVYN_ARXIV_RELATED=1` or use `--arxiv` flag (when available)
+- MAVYN queries arXiv API with keyword search
+- Results are deduplicated against your library
+- Ranked by semantic similarity
+
+## 🗺️ Project Structure
+
+```
+MAVYN/
+├── ~/.MAVYN/              # User data directory
+│   ├── MAVYN.db          # Local database
+│   ├── search.index      # FAISS vector index
+│   └── .env              # Optional API keys
+└── src/MAVYN/            # Source code
+    ├── cli/              # Interactive REPL & commands
+    ├── core/             # PDF processing & sync
+    ├── db/               # Database & models
+    ├── embeddings/       # Vector search
+    ├── llm/              # AI providers & caching
+    └── integrations/     # arXiv client
+```
+
+## 📝 License
 
 MIT License - see LICENSE file for details
 
-## Support
+## 💬 Support
 
-- Report issues: [GitHub Issues](https://github.com/alMohimanul/lemma/issues)
+- Report issues: [GitHub Issues](https://github.com/alMohimanul/mavyn/issues)
 - Questions: Open a discussion on GitHub
+
+## 🙏 Acknowledgments
+
+MAVYN builds on open source technologies:
+- Sentence Transformers for embeddings
+- FAISS for vector search
+- Rich for beautiful terminal UI
+- Click for CLI framework

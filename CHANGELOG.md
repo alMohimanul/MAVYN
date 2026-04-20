@@ -55,9 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical
 - New database table: `PaperComparison` for caching comparison results
 - New modules:
-  - `src/lemma/llm/question_parser.py` - Comparison detection and parsing
-  - `src/lemma/llm/comparison.py` - Multi-paper comparison engine
-  - `src/lemma/llm/comparison_cache.py` - Cache management
+  - `src/MAVYN/llm/question_parser.py` - Comparison detection and parsing
+  - `src/MAVYN/llm/comparison.py` - Multi-paper comparison engine
+  - `src/MAVYN/llm/comparison_cache.py` - Cache management
 - Extended `Repository` with comparison CRUD methods:
   - `add_paper_comparison()`, `get_paper_comparison()`
   - `get_section_embeddings()`, `get_all_section_names_for_papers()`
@@ -129,4 +129,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed**: Bug fixes
 - **Security**: Vulnerability fixes
 
-For the complete list of changes in each release, see the [GitHub Releases](https://github.com/yourusername/lemma/releases) page.
+For the complete list of changes in each release, see the [GitHub Releases](https://github.com/alMohimanul/mavyn/releases) page.

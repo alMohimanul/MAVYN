@@ -1,18 +1,18 @@
-"""Setup script for lemma package."""
+"""Setup script for MAVYN package."""
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="lemma-ai",
+    name="MAVYN",
     version="2.0.0",
     author="Mahir",
     author_email="aislam192054@gmail.com",
     description="Local-first paper manager with semantic search and LLM reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/alMohimanul/lemma",
+    url="https://github.com/alMohimanul/mavyn",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     classifiers=[
@@ -41,7 +41,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "lemma=lemma.cli.commands:main",
+            "mavyn=MAVYN.cli.commands:main",
         ],
     },
     extras_require={

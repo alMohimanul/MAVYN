@@ -1,9 +1,12 @@
 """LLM provider abstraction with rotation and fallback."""
 import os
 import warnings
+import logging
 from typing import Optional, List, Dict, Callable
 from dataclasses import dataclass
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 # Suppress FutureWarnings from deprecated packages
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -65,12 +68,13 @@ class GroqProvider(LLMProvider):
     """Groq (Compound Mini) provider with tool support."""
 
     def __init__(self, api_key: Optional[str] = None):
-        super().__init__(api_key or os.getenv("GROQ_API_KEY"))
+        key = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
+        super().__init__(key)
         if Groq is None:
             raise ImportError("groq package required. Install with: pip install groq")
 
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment")
+            raise ValueError("GROQ_API_KEY not found or empty")
 
         self.client = Groq(api_key=self.api_key)
         self.model = "groq/compound-mini"  # Updated to compound-mini with tools
@@ -118,7 +122,8 @@ class GeminiProvider(LLMProvider):
     """Google Gemini provider."""
 
     def __init__(self, api_key: Optional[str] = None):
-        super().__init__(api_key or os.getenv("GEMINI_API_KEY"))
+        key = (api_key or os.getenv("GEMINI_API_KEY") or "").strip()
+        super().__init__(key)
         if genai is None:
             raise ImportError(
                 "google-generativeai package required. "
@@ -126,7 +131,7 @@ class GeminiProvider(LLMProvider):
             )
 
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment")
+            raise ValueError("GEMINI_API_KEY not found or empty")
 
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel("gemini-1.5-flash")
@@ -156,12 +161,13 @@ class OpenRouterProvider(LLMProvider):
     """OpenRouter provider (fallback)."""
 
     def __init__(self, api_key: Optional[str] = None):
-        super().__init__(api_key or os.getenv("OPENROUTER_API_KEY"))
+        key = (api_key or os.getenv("OPENROUTER_API_KEY") or "").strip()
+        super().__init__(key)
         if httpx is None:
             raise ImportError("httpx package required. Install with: pip install httpx")
 
         if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment")
+            raise ValueError("OPENROUTER_API_KEY not found or empty")
 
         self.base_url = "https://openrouter.ai/api/v1"
         self.model = "meta-llama/llama-3.1-8b-instruct:free"  # Free tier model
@@ -281,11 +287,17 @@ class LLMRouter:
 
         # Try each provider in order
         last_error = None
+        tried_providers = []
+
         for provider_type in self.provider_order:
             provider = self._get_provider(provider_type)
 
             if provider is None:
+                logger.debug(f"Provider {provider_type.value} not available, skipping")
                 continue
+
+            tried_providers.append(provider_type.value)
+            logger.info(f"Trying LLM provider: {provider_type.value}")
 
             try:
                 response = provider.generate(prompt, max_tokens=max_tokens)
@@ -294,18 +306,22 @@ class LLMRouter:
                 if self.cache_enabled and cache_store and response:
                     cache_store(prompt, response)
 
+                logger.info(f"Successfully used provider: {provider_type.value}")
                 return response
 
             except Exception as e:
+                logger.warning(f"Provider {provider_type.value} failed: {str(e)[:100]}")
                 last_error = e
                 # Continue to next provider
                 continue
 
         # All providers failed
-        if last_error:
-            raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
+        if tried_providers:
+            error_msg = f"All tried providers ({', '.join(tried_providers)}) failed. Last error: {last_error}"
+        else:
+            error_msg = "No LLM providers available. Please configure GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY"
 
-        return None
+        raise RuntimeError(error_msg)
 
     def is_available(self) -> bool:
         """Check if at least one provider is available.

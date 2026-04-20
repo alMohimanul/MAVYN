@@ -29,9 +29,9 @@ logger = get_logger(__name__)
 
 
 class Repository:
-    """Database access layer for lemma."""
+    """Database access layer for MAVYN."""
 
-    def __init__(self, db_path: str = "~/.lemma/lemma.db"):
+    def __init__(self, db_path: str = "~/.MAVYN/MAVYN.db"):
         """Initialize database connection.
 
         Args:
@@ -1204,3 +1204,225 @@ class Repository:
             except SQLAlchemyError as e:
                 session.rollback()
                 log_exception(logger, "Failed to cache arXiv query", e)
+
+    # ===== Session Management for Context Tracking =====
+
+    def create_session(self) -> Optional[str]:
+        """Create a new conversation session.
+
+        Returns:
+            Session ID (UUID string) if successful, None otherwise
+        """
+        import uuid
+        from .models import Session
+
+        session_id = str(uuid.uuid4())
+
+        with self.get_session() as session:
+            try:
+                new_session = Session(
+                    session_id=session_id,
+                    started_at=datetime.utcnow(),
+                    paper_ids="[]",
+                    message_count=0,
+                    active=True,
+                )
+                session.add(new_session)
+                session.commit()
+                logger.info(f"Created new session: {session_id}")
+                return session_id
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(logger, "Failed to create session", e)
+                return None
+
+    def end_session(self, session_id: str) -> bool:
+        """Mark a session as ended.
+
+        Args:
+            session_id: Session ID to end
+
+        Returns:
+            True if successful, False otherwise
+        """
+        from .models import Session
+
+        with self.get_session() as session:
+            try:
+                session.query(Session).filter(Session.session_id == session_id).update(
+                    {
+                        "ended_at": datetime.utcnow(),
+                        "active": False,
+                    }
+                )
+                session.commit()
+                logger.info(f"Ended session: {session_id}")
+                return True
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(logger, "Failed to end session", e)
+                return False
+
+    def get_active_session(self) -> Optional[str]:
+        """Get the most recent active session ID.
+
+        Returns:
+            Session ID if found, None otherwise
+        """
+        from .models import Session
+
+        with self.get_session() as session:
+            try:
+                active = (
+                    session.query(Session)
+                    .filter(Session.active.is_(True))
+                    .order_by(Session.started_at.desc())
+                    .first()
+                )
+                return active.session_id if active else None
+            except SQLAlchemyError as e:
+                log_exception(logger, "Failed to get active session", e)
+                return None
+
+    def add_conversation_turn(
+        self,
+        session_id: str,
+        question: str,
+        answer: str,
+        paper_ids: list = None,
+        provider: str = None,
+        model: str = None,
+        tokens_used: int = None,
+    ) -> bool:
+        """Add a conversation turn to a session.
+
+        Args:
+            session_id: Session ID
+            question: User's question
+            answer: Assistant's answer
+            paper_ids: List of paper IDs referenced (optional)
+            provider: LLM provider used (optional)
+            model: Model name used (optional)
+            tokens_used: Tokens consumed (optional)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        from .models import Session, ConversationTurn
+
+        with self.get_session() as session:
+            try:
+                # Get current message count
+                session_obj = (
+                    session.query(Session)
+                    .filter(Session.session_id == session_id)
+                    .first()
+                )
+
+                if not session_obj:
+                    logger.error(f"Session not found: {session_id}")
+                    return False
+
+                turn_number = session_obj.message_count + 1
+
+                # Create conversation turn
+                turn = ConversationTurn(
+                    session_id=session_id,
+                    turn_number=turn_number,
+                    question=question,
+                    answer=answer,
+                    paper_ids=json.dumps(paper_ids or []),
+                    timestamp=datetime.utcnow(),
+                    provider=provider,
+                    model=model,
+                    tokens_used=tokens_used,
+                )
+                session.add(turn)
+
+                # Update session message count and paper IDs
+                session_obj.message_count = turn_number
+
+                # Merge paper IDs
+                if paper_ids:
+                    existing_papers = set(json.loads(session_obj.paper_ids or "[]"))
+                    existing_papers.update(paper_ids)
+                    session_obj.paper_ids = json.dumps(list(existing_papers))
+
+                session.commit()
+                logger.info(f"Added turn {turn_number} to session {session_id}")
+                return True
+
+            except SQLAlchemyError as e:
+                session.rollback()
+                log_exception(logger, "Failed to add conversation turn", e)
+                return False
+
+    def get_session_history(self, session_id: str, limit: int = 10) -> list:
+        """Get conversation history for a session.
+
+        Args:
+            session_id: Session ID
+            limit: Maximum number of recent turns to return
+
+        Returns:
+            List of conversation turn dictionaries (most recent first)
+        """
+        from .models import ConversationTurn
+
+        with self.get_session() as session:
+            try:
+                turns = (
+                    session.query(ConversationTurn)
+                    .filter(ConversationTurn.session_id == session_id)
+                    .order_by(ConversationTurn.turn_number.desc())
+                    .limit(limit)
+                    .all()
+                )
+
+                # Reverse to get chronological order
+                turns = list(reversed(turns))
+
+                return [
+                    {
+                        "turn_number": turn.turn_number,
+                        "question": turn.question,
+                        "answer": turn.answer,
+                        "paper_ids": json.loads(turn.paper_ids or "[]"),
+                        "timestamp": turn.timestamp,
+                        "provider": turn.provider,
+                        "model": turn.model,
+                        "tokens_used": turn.tokens_used,
+                    }
+                    for turn in turns
+                ]
+
+            except SQLAlchemyError as e:
+                log_exception(logger, "Failed to get session history", e)
+                return []
+
+    def get_session_papers(self, session_id: str) -> list:
+        """Get list of paper IDs discussed in a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            List of paper IDs
+        """
+        from .models import Session
+
+        with self.get_session() as session:
+            try:
+                session_obj = (
+                    session.query(Session)
+                    .filter(Session.session_id == session_id)
+                    .first()
+                )
+
+                if session_obj:
+                    return json.loads(session_obj.paper_ids or "[]")
+                return []
+
+            except SQLAlchemyError as e:
+                log_exception(logger, "Failed to get session papers", e)
+                return []

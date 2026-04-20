@@ -1,6 +1,6 @@
-# Contributing to Lemma
+# Contributing to MAVYN
 
-Thank you for your interest in contributing to Lemma! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to MAVYN! This document provides guidelines and instructions for contributing.
 
 ## 🤝 How to Contribute
 
@@ -11,7 +11,7 @@ Before creating bug reports, please check existing issues. When creating a bug r
 - **Clear title and description**
 - **Steps to reproduce**
 - **Expected vs actual behavior**
-- **Environment details** (OS, Python version, Lemma version)
+- **Environment details** (OS, Python version, MAVYN version)
 - **Relevant logs or error messages**
 
 ### Suggesting Enhancements
@@ -44,8 +44,8 @@ Enhancement suggestions are welcome! Please provide:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/lemma.git
-cd lemma
+git clone https://github.com/YOUR_USERNAME/mavyn.git
+cd mavyn
 
 # Create virtual environment
 python -m venv venv
@@ -118,8 +118,8 @@ def process_paper(paper_path: Path, extract_metadata: bool = True) -> Paper:
 ## 🏗️ Project Structure
 
 ```
-lemma/
-├── src/lemma/
+MAVYN/
+├── src/MAVYN/
 │   ├── cli/          # Command-line interface
 │   ├── core/         # Core functionality (scanner, extractor, organizer)
 │   ├── db/           # Database models and repository
@@ -251,4 +251,4 @@ Contributors will be:
 
 ---
 
-**Thank you for contributing to Lemma!** Your efforts help researchers worldwide manage their papers more effectively. 🚀📚
+**Thank you for contributing to MAVYN!** Your efforts help researchers worldwide manage their papers more effectively. 🚀📚
