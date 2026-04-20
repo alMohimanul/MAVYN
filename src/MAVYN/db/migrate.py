@@ -1,6 +1,6 @@
 """Database migration utilities for adding incremental embedding support.
 
-This module provides functions to safely migrate existing RAVYN databases
+This module provides functions to safely migrate existing MAVYN databases
 to support the new versioning and advanced chunking features.
 """
 import hashlib
@@ -15,7 +15,7 @@ from .models import Paper, Embedding
 logger = get_logger(__name__)
 
 
-def migrate_to_versioning(db_path: str = "~/.RAVYN/RAVYN.db") -> bool:
+def migrate_to_versioning(db_path: str = "~/.MAVYN/MAVYN.db") -> bool:
     """Migrate existing database to support versioning and incremental embeddings.
 
     This migration:
@@ -221,7 +221,7 @@ def _compute_chunk_hashes(repo: Repository):
         logger.info(f"Computed chunk hashes for {count} embeddings")
 
 
-def check_migration_status(db_path: str = "~/.RAVYN/RAVYN.db") -> dict:
+def check_migration_status(db_path: str = "~/.MAVYN/MAVYN.db") -> dict:
     """Check if database has been migrated to versioning schema.
 
     Args:
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     # Run migration when executed directly
     import sys
 
-    db_path = sys.argv[1] if len(sys.argv) > 1 else "~/.RAVYN/RAVYN.db"
+    db_path = sys.argv[1] if len(sys.argv) > 1 else "~/.MAVYN/MAVYN.db"
 
     print(f"Migrating database: {db_path}")
     success = migrate_to_versioning(db_path)

@@ -29,9 +29,9 @@ logger = get_logger(__name__)
 
 
 class Repository:
-    """Database access layer for RAVYN."""
+    """Database access layer for MAVYN."""
 
-    def __init__(self, db_path: str = "~/.RAVYN/RAVYN.db"):
+    def __init__(self, db_path: str = "~/.MAVYN/MAVYN.db"):
         """Initialize database connection.
 
         Args:

@@ -1,4 +1,4 @@
-"""SQLite schema for RAVYN paper manager."""
+"""SQLite schema for MAVYN paper manager."""
 from datetime import datetime
 from sqlalchemy import (
     Column,

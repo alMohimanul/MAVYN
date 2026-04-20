@@ -1,5 +1,5 @@
 """Tests for PDF scanner."""
-from RAVYN.core.scanner import PDFScanner
+from MAVYN.core.scanner import PDFScanner
 
 
 def test_scanner_initialization():

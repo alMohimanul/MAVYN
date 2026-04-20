@@ -22,7 +22,7 @@ def _arxiv_tag(local: str) -> str:
 
 MAX_RESULTS_CAP = 30
 DEFAULT_USER_AGENT = (
-    "RAVYN/1.0 (+https://github.com/alMohimanul/ravyn; similar-papers feature)"
+    "MAVYN/1.0 (+https://github.com/alMohimanul/ravyn; similar-papers feature)"
 )
 
 _STOPWORDS = frozenset(

@@ -23,7 +23,7 @@ class SyncOrchestrator:
         rename_pattern: str = "{year}_{first_author}_{short_title}.pdf",
         embed_immediately: bool = True,
         chunking_strategy: str = "hybrid",
-        index_path: str = "~/.RAVYN/search.index",
+        index_path: str = "~/.MAVYN/search.index",
         use_watchdog: bool = True,
         scan_interval: int = 60,
     ):

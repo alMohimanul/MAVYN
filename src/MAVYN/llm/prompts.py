@@ -22,7 +22,7 @@ def build_qa_prompt(question: str, context_papers: List[Dict[str, Any]]) -> str:
         text = paper.get("text", "")
 
         context_parts.append(
-            f"[Paper {i} | RAVYN id: {lemma_id}]\n"
+            f"[Paper {i} | MAVYN id: {lemma_id}]\n"
             f"Title: {title}\n"
             f"Authors: {authors}\n"
             f"Year: {year}\n"
@@ -33,7 +33,7 @@ def build_qa_prompt(question: str, context_papers: List[Dict[str, Any]]) -> str:
 
     prompt = f"""You are a research assistant helping to answer questions about academic papers.
 
-Based on the following papers, answer the question below. When the user names a RAVYN id (e.g. "paper 9"), use the block with that RAVYN id. Cite specific papers when relevant.
+Based on the following papers, answer the question below. When the user names a MAVYN id (e.g. "paper 9"), use the block with that MAVYN id. Cite specific papers when relevant.
 
 Papers:
 {context}
@@ -69,12 +69,12 @@ No arXiv candidates were fetched for this request (local library only or arXiv d
 The user asked:
 {question}
 
-LOCAL_LIBRARY_CANDIDATES (papers already in the user's RAVYN library; RAVYN paper id is authoritative):
+LOCAL_LIBRARY_CANDIDATES (papers already in the user's MAVYN library; MAVYN paper id is authoritative):
 {local_candidates_text}
 {arxiv_section}
 
 Instructions:
-1. Summarize which local papers are most related to the question and why (use RAVYN paper ids from the block).
+1. Summarize which local papers are most related to the question and why (use MAVYN paper ids from the block).
 2. If ARXIV_CANDIDATES is non-empty, briefly describe how each suggested arXiv preprint relates; treat arXiv results as keyword-based suggestions, not guaranteed semantic neighbors.
 3. Never fabricate arXiv identifiers, DOIs, or URLs — only use those explicitly listed in ARXIV_CANDIDATES.
 4. Clearly separate "In your library" from "On arXiv (not in library)" in your answer.

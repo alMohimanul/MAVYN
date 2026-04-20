@@ -324,7 +324,7 @@ def info(paper_id: int, db: str):
     "no_arxiv_cli",
     is_flag=True,
     default=False,
-    help="Do not query arXiv even if RAVYN_ARXIV_RELATED=1 is set.",
+    help="Do not query arXiv even if MAVYN_ARXIV_RELATED=1 is set.",
 )
 def ask(
     question: str,
@@ -452,7 +452,7 @@ def ask(
                 return
 
         use_arxiv = (
-            arxiv_cli or os.environ.get("RAVYN_ARXIV_RELATED", "").strip() == "1"
+            arxiv_cli or os.environ.get("MAVYN_ARXIV_RELATED", "").strip() == "1"
         ) and not no_arxiv_cli
 
         if wants_similar_papers(question):
@@ -485,7 +485,7 @@ def ask(
             if not has_index and not use_arxiv:
                 output.print_error(
                     "Similar-papers questions need a FAISS index (run 'lemma embed') "
-                    "or enable arXiv with --arxiv or RAVYN_ARXIV_RELATED=1."
+                    "or enable arXiv with --arxiv or MAVYN_ARXIV_RELATED=1."
                 )
                 return
 

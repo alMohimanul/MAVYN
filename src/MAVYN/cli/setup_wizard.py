@@ -1,4 +1,4 @@
-"""First-run setup wizard for RAVYN."""
+"""First-run setup wizard for MAVYN."""
 import os
 from pathlib import Path
 
@@ -10,8 +10,8 @@ console = Console()
 
 
 def get_config_dir() -> Path:
-    """Get the RAVYN configuration directory."""
-    config_dir = Path.home() / ".RAVYN"
+    """Get the MAVYN configuration directory."""
+    config_dir = Path.home() / ".MAVYN"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
@@ -22,7 +22,7 @@ def get_env_file() -> Path:
 
 
 def is_first_run() -> bool:
-    """Check if this is the first time RAVYN is run."""
+    """Check if this is the first time MAVYN is run."""
     env_file = get_env_file()
     return not env_file.exists()
 
@@ -51,7 +51,7 @@ def has_api_keys() -> bool:
 
 
 def save_api_key(provider: str, api_key: str) -> None:
-    """Save API key to ~/.RAVYN/.env file."""
+    """Save API key to ~/.MAVYN/.env file."""
     env_file = get_env_file()
 
     # Read existing content if file exists
@@ -88,8 +88,8 @@ def run_setup_wizard(skip_if_configured: bool = True) -> None:
     console.print()
     console.print(
         Panel.fit(
-            "[bold cyan]Welcome to RAVYN! 📚[/bold cyan]\n\n"
-            "RAVYN is a local-first paper manager with AI-powered features.\n\n"
+            "[bold cyan]Welcome to MAVYN! 📚[/bold cyan]\n\n"
+            "MAVYN is a local-first paper manager with AI-powered features.\n\n"
             "[dim]Let's set up your API keys for AI features (optional).[/dim]",
             border_style="cyan",
         )

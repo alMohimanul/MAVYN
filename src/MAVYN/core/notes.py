@@ -18,10 +18,10 @@ class NoteManager:
         """Initialize note manager.
 
         Args:
-            data_dir: Directory for RAVYN data (default: ~/.RAVYN)
+            data_dir: Directory for MAVYN data (default: ~/.MAVYN)
         """
         if data_dir is None:
-            data_dir = Path.home() / ".RAVYN"
+            data_dir = Path.home() / ".MAVYN"
 
         self.data_dir = Path(data_dir).expanduser().resolve()
 

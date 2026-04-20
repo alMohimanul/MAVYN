@@ -1,4 +1,4 @@
-"""Centralized logging configuration for RAVYN."""
+"""Centralized logging configuration for MAVYN."""
 import logging
 import sys
 from pathlib import Path
@@ -7,8 +7,8 @@ from typing import Optional
 
 
 def get_log_dir() -> Path:
-    """Get the RAVYN log directory."""
-    log_dir = Path.home() / ".RAVYN"
+    """Get the MAVYN log directory."""
+    log_dir = Path.home() / ".MAVYN"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 
@@ -47,7 +47,7 @@ def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
     )
     simple_formatter = logging.Formatter("[%(levelname)s] %(message)s")
 
-    # File handler - detailed logs to ~/.RAVYN/app.log
+    # File handler - detailed logs to ~/.MAVYN/app.log
     try:
         log_file = get_log_dir() / "app.log"
         file_handler = RotatingFileHandler(
