@@ -1,5 +1,5 @@
 """Tests for PDF scanner."""
-from lemma.core.scanner import PDFScanner
+from RAVYN.core.scanner import PDFScanner
 
 
 def test_scanner_initialization():

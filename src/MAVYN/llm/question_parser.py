@@ -77,7 +77,7 @@ SIMILAR_PAPERS_PATTERNS = [
 def wants_similar_papers(question: str) -> bool:
     """True when the user wants suggestions for related / similar papers.
 
-    Used by ``lemma ask`` (without a separate command). Example phrases:
+    Used by ``RAVYN ask`` (without a separate command). Example phrases:
     "similar papers on X", "related work for transformers", "papers like paper 5",
     "what else should I read on this topic".
     """

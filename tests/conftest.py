@@ -60,7 +60,7 @@ startxref
 @pytest.fixture
 def test_db_path(temp_dir):
     """Create a temporary database path with proper cleanup."""
-    db_path = str(temp_dir / "test_lemma.db")
+    db_path = str(temp_dir / "test_RAVYN.db")
     yield db_path
 
     # Ensure all SQLAlchemy connections are closed before cleanup

@@ -1,6 +1,6 @@
 """Tests for embeddings module."""
 import numpy as np
-from lemma.embeddings.encoder import EmbeddingEncoder
+from RAVYN.embeddings.encoder import EmbeddingEncoder
 
 
 def test_encoder_initialization():

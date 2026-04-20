@@ -18,10 +18,10 @@ class NoteManager:
         """Initialize note manager.
 
         Args:
-            data_dir: Directory for lemma data (default: ~/.lemma)
+            data_dir: Directory for RAVYN data (default: ~/.RAVYN)
         """
         if data_dir is None:
-            data_dir = Path.home() / ".lemma"
+            data_dir = Path.home() / ".RAVYN"
 
         self.data_dir = Path(data_dir).expanduser().resolve()
 

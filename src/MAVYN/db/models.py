@@ -1,4 +1,4 @@
-"""SQLite schema for lemma paper manager."""
+"""SQLite schema for RAVYN paper manager."""
 from datetime import datetime
 from sqlalchemy import (
     Column,
@@ -246,3 +246,50 @@ class ArxivQueryCache(Base):
     results_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
+
+
+class Session(Base):
+    """Track user sessions for context management."""
+
+    __tablename__ = "sessions"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ended_at = Column(DateTime)
+    paper_ids = Column(Text)  # JSON array of paper IDs discussed in this session
+    message_count = Column(Integer, default=0, nullable=False)
+    active = Column(Boolean, default=True, nullable=False, index=True)
+
+    # Relationship to conversation turns
+    conversation_turns = relationship("ConversationTurn", back_populates="session")
+
+    def __repr__(self):
+        return f"<Session(id={self.id}, session_id='{self.session_id}', started_at={self.started_at}, active={self.active})>"
+
+
+class ConversationTurn(Base):
+    """Track individual Q&A turns in a session for context-aware responses."""
+
+    __tablename__ = "conversation_history"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(
+        String(64), ForeignKey("sessions.session_id"), nullable=False, index=True
+    )
+    turn_number = Column(Integer, nullable=False)  # Sequential turn number in session
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    paper_ids = Column(Text)  # JSON array of paper IDs referenced in this turn
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    provider = Column(String(32))  # LLM provider used
+    model = Column(String(64))  # Model name
+    tokens_used = Column(Integer)
+
+    # Relationship to session
+    session = relationship("Session", back_populates="conversation_turns")
+
+    __table_args__ = (Index("idx_session_turn", "session_id", "turn_number"),)
+
+    def __repr__(self):
+        return f"<ConversationTurn(id={self.id}, session_id='{self.session_id}', turn={self.turn_number}, question='{self.question[:30]}...')>"
