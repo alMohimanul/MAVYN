@@ -1,0 +1,68 @@
+# Virtual environments
+MAVYN-venv/
+lemma-venv/
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE and local tooling
+.vscode/
+.idea/
+.cursor/
+.claude/
+*.swp
+*.swo
+*~
+
+# Type checker cache
+.mypy_cache/
+.ruff_cache/
+
+# MAVYN-specific
+.MAVYN/
+*.db
+*.faiss
+*.index
+
+# Environment variables
+.env
+.env.local
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation files (keep only essential public docs)
+*.md
+!README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+
+# Optional: Uncomment if you create these files
+# !SECURITY.md
+# !CODE_OF_CONDUCT.md
+
+# MAVYN runtime files
+*.log
+app.log
+
+# Build artifacts
+src/*.egg-info

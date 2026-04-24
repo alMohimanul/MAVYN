@@ -1,0 +1,28 @@
+# Core CLI framework
+click>=8.1.0
+
+# PDF processing
+pypdf2>=3.0.0
+pdfplumber>=0.11.0
+
+# Local embeddings and vector search
+sentence-transformers>=2.3.0
+faiss-cpu>=1.7.4
+
+# Natural Language Processing (for advanced chunking)
+nltk>=3.8.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# LLM providers
+groq>=0.4.0
+google-generativeai>=0.3.0
+httpx>=0.26.0
+
+# CLI output formatting
+rich>=13.7.0
+
+# Utilities
+python-dotenv>=1.0.0
+watchdog>=3.0.0

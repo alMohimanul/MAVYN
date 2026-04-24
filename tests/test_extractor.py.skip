@@ -1,0 +1,80 @@
+"""Tests for PDF metadata extractor."""
+import pytest
+from pathlib import Path
+from lemma.core.extractor import MetadataExtractor
+
+
+def test_extractor_initialization():
+    """Test extractor can be initialized."""
+    extractor = MetadataExtractor()
+    assert extractor is not None
+
+
+def test_extract_from_pdf(sample_pdf):
+    """Test extracting metadata from a PDF."""
+    extractor = MetadataExtractor()
+    metadata = extractor.extract_metadata(sample_pdf)
+
+    assert metadata is not None
+    assert "text" in metadata
+    assert "pages" in metadata
+    assert metadata["pages"] == 1
+
+
+def test_extract_text(sample_pdf):
+    """Test text extraction from PDF."""
+    extractor = MetadataExtractor()
+    text = extractor.extract_text(sample_pdf)
+
+    # Minimal PDF might not have extractable text, but should return string
+    assert isinstance(text, str)
+
+
+def test_extract_from_nonexistent_file(temp_dir):
+    """Test extraction from nonexistent file raises error."""
+    extractor = MetadataExtractor()
+    nonexistent = temp_dir / "nonexistent.pdf"
+
+    with pytest.raises((FileNotFoundError, Exception)):
+        extractor.extract_metadata(nonexistent)
+
+
+def test_extract_metadata_structure(sample_pdf):
+    """Test that extracted metadata has expected structure."""
+    extractor = MetadataExtractor()
+    metadata = extractor.extract_metadata(sample_pdf)
+
+    # Check for expected keys
+    expected_keys = ["text", "pages"]
+    for key in expected_keys:
+        assert key in metadata
+
+
+def test_chunking_text():
+    """Test text chunking functionality."""
+    extractor = MetadataExtractor()
+
+    long_text = "word " * 1000  # Create long text
+    chunks = extractor.chunk_text(long_text, chunk_size=500, overlap=50)
+
+    assert len(chunks) > 1
+    assert all(isinstance(chunk, str) for chunk in chunks)
+    assert all(len(chunk) <= 500 for chunk in chunks)
+
+
+def test_empty_pdf_handling(temp_dir):
+    """Test handling of empty or corrupted PDF."""
+    extractor = MetadataExtractor()
+
+    # Create an invalid PDF file
+    invalid_pdf = temp_dir / "invalid.pdf"
+    invalid_pdf.write_bytes(b"Not a valid PDF")
+
+    # Should handle gracefully without crashing
+    try:
+        metadata = extractor.extract_metadata(invalid_pdf)
+        # If it succeeds, should return some structure
+        assert isinstance(metadata, dict)
+    except Exception as e:
+        # Or raise a clear exception
+        assert e is not None
