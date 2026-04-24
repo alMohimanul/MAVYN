@@ -403,7 +403,8 @@ def ask(
             if not llm_router.is_available():
                 output.print_error(
                     "No LLM providers available. Please set up API keys:\n"
-                    "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY"
+                    "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY\n"
+                    "  — or run a local Ollama server: ollama serve"
                 )
                 return
 
@@ -712,46 +713,128 @@ def ask(
                 output.print_error(f"Failed to generate answer: {e}")
             return
 
-        # EXISTING: Regular Q&A flow (no changes to existing code below)
+        # Q&A / Summarize flow — task-aware retrieval
 
-        # Check if FAISS index exists
-        index_file = Path(index_path).expanduser()
-        if not index_file.with_suffix(".faiss").exists():
-            output.print_error("No embeddings found. Please run 'lemma embed' first.")
-            return
+        from ..embeddings.retrieval import (
+            HybridRetriever,
+            StructuredExtractor,
+            TaskRouter,
+        )
 
-        # Initialize components
-        try:
-            encoder = EmbeddingEncoder()
-            search_index = SemanticSearchIndex(
-                embedding_dim=encoder.embedding_dim, index_path=index_file
-            )
-            output.print_info(f"Loaded search index with {search_index.size()} vectors")
-        except Exception as e:
-            output.print_error(f"Failed to load search index: {e}")
-            return
+        # Detect task type before touching FAISS (summarize skips it entirely)
+        _preview_ids = extract_paper_ids(question)
+        task_type, task_section = TaskRouter().detect(question, _preview_ids)
 
-        # Check if index is empty
-        if search_index.size() == 0:
-            output.print_error("Search index is empty. Please run 'lemma embed' first.")
-            return
+        context_str: str
+        included_ids: List[int]
 
-        # Encode the question
-        try:
+        if task_type == "summarize_section" and len(_preview_ids) == 1:
+            # Section-targeted summarise: fetch only that section
+            from ..embeddings.retrieval import AlignedExtractor
+
+            _pid = _preview_ids[0]
+            _paper_obj = repo.get_paper_by_id(_pid)
+            if not _paper_obj:
+                output.print_error(f"Paper id {_pid} not found in library.")
+                return
+
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 transient=True,
             ) as progress:
-                task = progress.add_task("Encoding question...", total=None)
-                query_vector = encoder.encode(question)
+                task = progress.add_task(
+                    f"Extracting {task_section} section...", total=None
+                )
+                section_text = AlignedExtractor(repo).extract_section_text(
+                    _pid, task_section, token_budget=1000
+                )
                 progress.update(task, completed=True)
-        except Exception as e:
-            output.print_error(f"Failed to encode question: {e}")
-            return
 
-        # Search for relevant papers (and always include IDs named in the question)
-        try:
+            _title = _paper_obj.title or "Untitled"
+            if not section_text:
+                # Section missing: build full-paper context so the LLM can
+                # acknowledge the gap and still provide a useful summary
+                context_str, included_ids = StructuredExtractor(repo).extract(
+                    _pid, _paper_obj
+                )
+                task_section = task_section + ":missing"  # signal to prompt dispatch
+                output.print_info(
+                    f"'{task_section.split(':')[0]}' section not found — "
+                    f"summarising full paper: {_title}"
+                )
+            else:
+                context_str = (
+                    f"[Paper 1 | {_title} | {task_section.title()}]\n{section_text}"
+                )
+                included_ids = [_pid]
+                output.print_info(f"Summarising {task_section} section of: {_title}")
+
+        elif task_type == "summarize" and len(_preview_ids) == 1:
+            # Single-paper structural extraction — no FAISS needed
+            _pid = _preview_ids[0]
+            _paper_obj = repo.get_paper_by_id(_pid)
+            if not _paper_obj:
+                output.print_error(f"Paper id {_pid} not found in library.")
+                return
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,
+            ) as progress:
+                task = progress.add_task("Extracting paper structure...", total=None)
+                context_str, included_ids = StructuredExtractor(repo).extract(
+                    _pid, _paper_obj
+                )
+                progress.update(task, completed=True)
+
+            output.print_info(f"Summarising: {_paper_obj.title or 'Untitled'}")
+
+            if not context_str:
+                output.print_error(
+                    f"No embedded chunks found for paper {_pid}. "
+                    "Run 'lemma embed' first."
+                )
+                return
+
+        else:
+            # General Q&A — FAISS + hybrid retrieval
+            index_file = Path(index_path).expanduser()
+            if not index_file.with_suffix(".faiss").exists():
+                output.print_error(
+                    "No embeddings found. Please run 'lemma embed' first."
+                )
+                return
+
+            try:
+                encoder = EmbeddingEncoder()
+                search_index = SemanticSearchIndex(
+                    embedding_dim=encoder.embedding_dim, index_path=index_file
+                )
+            except Exception as e:
+                output.print_error(f"Failed to load search index: {e}")
+                return
+
+            if search_index.size() == 0:
+                output.print_error(
+                    "Search index is empty. Please run 'lemma embed' first."
+                )
+                return
+
+            try:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task("Encoding question...", total=None)
+                    query_vector = encoder.encode(question)
+                    progress.update(task, completed=True)
+            except Exception as e:
+                output.print_error(f"Failed to encode question: {e}")
+                return
+
             explicit_ids = extract_paper_ids(question)
             valid_explicit: List[int] = []
             for pid in explicit_ids:
@@ -761,107 +844,48 @@ def ask(
                 else:
                     output.print_warning(f"Paper id {pid} not found in library.")
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                transient=True,
-            ) as progress:
-                task = progress.add_task("Searching papers...", total=None)
-                top_papers = search_index.get_top_papers(
-                    query_vector, top_k=max(top_k * 3, top_k + len(valid_explicit) * 2)
-                )
-                progress.update(task, completed=True)
-
-            if not top_papers and not valid_explicit:
-                output.print_warning("No relevant papers found for your question.")
-                return
-
-            seen = set()
-            paper_ids: List[int] = []
-            for pid in valid_explicit:
-                if pid not in seen:
-                    seen.add(pid)
-                    paper_ids.append(pid)
-            target = min(max(top_k, len(paper_ids)), 25)
-            for pid, _ in top_papers:
-                if len(paper_ids) >= target:
-                    break
-                if pid not in seen:
-                    seen.add(pid)
-                    paper_ids.append(pid)
-
             if valid_explicit:
                 output.print_info(
                     f"Including lemma id(s) from your question: {valid_explicit}"
                 )
-            output.print_info(f"Using {len(paper_ids)} paper(s) for context")
 
-        except Exception as e:
-            output.print_error(f"Search failed: {e}")
-            return
+            try:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task("Searching papers...", total=None)
+                    context_str, included_ids = HybridRetriever(
+                        search_index, repo
+                    ).retrieve(
+                        question=question,
+                        query_vector=query_vector,
+                        top_k=top_k,
+                        pinned_paper_ids=valid_explicit if valid_explicit else None,
+                    )
+                    progress.update(task, completed=True)
+            except Exception as e:
+                output.print_error(f"Search failed: {e}")
+                return
 
-        # Retrieve paper details
-        try:
-            papers = repo.get_papers_by_ids(paper_ids)
+            if not included_ids:
+                output.print_warning("No relevant papers found for your question.")
+                return
 
-            # Build context for LLM
-            context_papers = []
-            for paper in papers:
-                # Extract text (use abstract if available, otherwise extract from PDF)
-                if paper.abstract and len(paper.abstract) > 100:
-                    paper_text = paper.abstract
-                else:
-                    try:
-                        paper_path = Path(paper.file_path)
-                        if paper_path.exists():
-                            full_text = extractor.extract_full_text(paper_path)
-                            paper_text = (
-                                full_text[:4000] if full_text else "No text available"
-                            )
-                        else:
-                            paper_text = "PDF file not found"
-                    except Exception:
-                        paper_text = "Error extracting text"
+            output.print_info(f"Using {len(included_ids)} paper(s) for context")
 
-                context_papers.append(
-                    {
-                        "id": paper.id,
-                        "title": paper.title or "Untitled",
-                        "authors": paper.authors or "Unknown",
-                        "year": paper.year or "N/A",
-                        "text": paper_text,
-                    }
-                )
-
-        except Exception as e:
-            output.print_error(f"Failed to retrieve papers: {e}")
-            return
-
-        # If the question targets methodology/sections, prefer more body text than abstract alone
-        _qlow = question.lower()
-        if any(
-            w in _qlow
-            for w in (
-                "method",
-                "methodology",
-                "approach",
-                "experiment",
-                "architecture",
-                "model",
-            )
-        ):
-            for cp in context_papers:
-                try:
-                    p = repo.get_paper_by_id(cp["id"])
-                    if not p:
-                        continue
-                    paper_path = Path(p.file_path)
-                    if paper_path.exists():
-                        full_text = extractor.extract_full_text(paper_path)
-                        if full_text and len(full_text) > len(cp.get("text") or ""):
-                            cp["text"] = full_text[:6000]
-                except Exception:
-                    pass
+        # Build minimal context_papers for downstream (note saving, display)
+        included_papers = repo.get_papers_by_ids(included_ids)
+        context_papers = [
+            {
+                "id": p.id,
+                "title": p.title or "Untitled",
+                "authors": p.authors or "Unknown",
+                "year": p.year or "N/A",
+            }
+            for p in included_papers
+        ]
 
         # Initialize LLM router and cache
         llm_router = LLMRouter(cache_enabled=True)
@@ -871,7 +895,8 @@ def ask(
         if not llm_router.is_available():
             output.print_error(
                 "No LLM providers available. Please set up API keys:\n"
-                "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY"
+                "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY\n"
+                "  — or run a local Ollama server: ollama serve"
             )
             output.print_info("\nShowing relevant papers instead:")
             output.print_paper_table(
@@ -898,7 +923,25 @@ def ask(
                 task = progress.add_task("Generating answer...", total=None)
 
                 # Build prompt
-                prompt = prompts.build_qa_prompt(question, context_papers)
+                _title = context_papers[0]["title"] if context_papers else "the paper"
+                if (
+                    task_type == "summarize_section"
+                    and task_section
+                    and len(included_ids) == 1
+                ):
+                    _raw_section = task_section.replace(":missing", "")
+                    if task_section.endswith(":missing"):
+                        prompt = prompts.build_section_missing_prompt(
+                            context_str, _title, _raw_section
+                        )
+                    else:
+                        prompt = prompts.build_section_summary_prompt(
+                            context_str, _title, _raw_section
+                        )
+                elif task_type == "summarize" and len(included_ids) == 1:
+                    prompt = prompts.build_summary_prompt(context_str, _title)
+                else:
+                    prompt = prompts.build_qa_prompt(question, context_str)
 
                 # Generate response with cache
                 response = llm_router.generate(

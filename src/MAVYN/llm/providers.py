@@ -14,17 +14,17 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 try:
     from groq import Groq
 except ImportError:
-    Groq = None
+    Groq = None  # type: ignore[assignment, misc]
 
 try:
     import google.generativeai as genai
 except ImportError:
-    genai = None
+    genai = None  # type: ignore[assignment]
 
 try:
     import httpx
 except ImportError:
-    httpx = None
+    httpx = None  # type: ignore[assignment]
 
 
 class ProviderType(Enum):
@@ -33,6 +33,7 @@ class ProviderType(Enum):
     GROQ = "groq"
     GEMINI = "gemini"
     OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
 
 
 @dataclass
@@ -203,6 +204,49 @@ class OpenRouterProvider(LLMProvider):
             raise RuntimeError(f"OpenRouter API error: {e}")
 
 
+class OllamaProvider(LLMProvider):
+    """Ollama local LLM provider (no API key required)."""
+
+    def __init__(self):
+        super().__init__(api_key=None)
+        if httpx is None:
+            raise ImportError("httpx package required. Install with: pip install httpx")
+
+        self.host = (os.getenv("OLLAMA_HOST") or "http://localhost:11434").rstrip("/")
+        self.model = (os.getenv("OLLAMA_MODEL") or "llama3.2").strip()
+
+        try:
+            with httpx.Client() as client:
+                client.get(f"{self.host}/api/tags", timeout=3.0).raise_for_status()
+        except Exception as e:
+            raise ValueError(f"Ollama server not reachable at {self.host}: {e}")
+
+    def generate(self, prompt: str, max_tokens: int = 1000) -> LLMResponse:
+        """Generate response using local Ollama server."""
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{self.host}/api/chat",
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": False,
+                        "options": {"num_predict": max_tokens, "temperature": 0.7},
+                    },
+                    timeout=60.0,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return LLMResponse(
+                    text=data["message"]["content"],
+                    provider="ollama",
+                    model=self.model,
+                    tokens_used=data.get("eval_count", 0),
+                )
+        except Exception as e:
+            raise RuntimeError(f"Ollama API error: {e}")
+
+
 class LLMRouter:
     """Routes requests to LLM providers with automatic fallback."""
 
@@ -221,6 +265,7 @@ class LLMRouter:
             ProviderType.GROQ,
             ProviderType.GEMINI,
             ProviderType.OPENROUTER,
+            ProviderType.OLLAMA,
         ]
         self.cache_enabled = cache_enabled
         self._initialized_providers: Dict[ProviderType, Optional[LLMProvider]] = {}
@@ -247,6 +292,8 @@ class LLMRouter:
                 provider = GeminiProvider()
             elif provider_type == ProviderType.OPENROUTER:
                 provider = OpenRouterProvider()
+            elif provider_type == ProviderType.OLLAMA:
+                provider = OllamaProvider()
 
             self._initialized_providers[provider_type] = provider
             return provider
@@ -319,7 +366,10 @@ class LLMRouter:
         if tried_providers:
             error_msg = f"All tried providers ({', '.join(tried_providers)}) failed. Last error: {last_error}"
         else:
-            error_msg = "No LLM providers available. Please configure GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY"
+            error_msg = (
+                "No LLM providers available. Please configure GROQ_API_KEY, GEMINI_API_KEY, "
+                "or OPENROUTER_API_KEY — or start a local Ollama server (ollama serve)"
+            )
 
         raise RuntimeError(error_msg)
 

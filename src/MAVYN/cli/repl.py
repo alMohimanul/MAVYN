@@ -6,6 +6,35 @@ from rich.panel import Panel
 from rich import box
 from rich.markdown import Markdown
 
+_HISTORY_FILE = Path.home() / ".MAVYN" / ".history"
+
+
+def _setup_readline() -> bool:
+    """Enable arrow-key navigation and persistent history via readline.
+
+    Returns True if readline is available (Unix/macOS), False on Windows.
+    """
+    try:
+        import readline
+
+        if _HISTORY_FILE.exists():
+            readline.read_history_file(str(_HISTORY_FILE))
+        readline.set_history_length(500)
+        return True
+    except (ImportError, OSError):
+        return False
+
+
+def _save_readline_history() -> None:
+    try:
+        import readline
+
+        _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        readline.write_history_file(str(_HISTORY_FILE))
+    except (ImportError, OSError):
+        pass
+
+
 console = Console()
 
 
@@ -201,15 +230,18 @@ No special command needed! Just type naturally:
                     "[yellow]Warning: Could not create session. Context tracking disabled.[/yellow]"
                 )
 
+        _setup_readline()
         self.print_welcome()
 
         try:
             while self.running:
                 try:
-                    # Get user input
-                    user_input = console.input(
-                        "\n[bold cyan]MAVYN>[/bold cyan] "
-                    ).strip()
+                    # Get user input.
+                    # Use plain input() with readline-safe ANSI codes (\001/\002 wrap
+                    # invisible sequences so readline measures the prompt width correctly,
+                    # preventing backspace from eating into the prompt text).
+                    _prompt = "\n\001\033[1;36m\002MAVYN>\001\033[0m\002 "
+                    user_input = input(_prompt).strip()
 
                     # Skip empty input
                     if not user_input:
@@ -240,7 +272,7 @@ No special command needed! Just type naturally:
 
         finally:
             self.running = False
-            # End the session
+            _save_readline_history()
             if self.session_id:
                 from ..db.repository import Repository
 

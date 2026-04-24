@@ -1,48 +1,53 @@
 """Reusable prompt templates for LLM interactions."""
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
-def build_qa_prompt(question: str, context_papers: List[Dict[str, Any]]) -> str:
-    """Build a prompt for question answering across papers.
+def _name_line(user_name: Optional[str]) -> str:
+    return (
+        f"You are assisting {user_name} with their research.\n\n" if user_name else ""
+    )
+
+
+def build_general_qa_prompt(question: str, user_name: Optional[str] = None) -> str:
+    """Prompt for questions not tied to any paper in the library."""
+    return f"""{_name_line(user_name)}You are MAVYN, an AI research assistant with broad knowledge.
+
+Answer the following question clearly and concisely from your general knowledge.
+If relevant, mention that the user can add papers to their MAVYN library for deeper, source-grounded answers.
+
+Question: {question}
+
+Answer:"""
+
+
+def build_qa_prompt(
+    question: str, context: str, user_name: Optional[str] = None
+) -> str:
+    """Build a Q&A prompt from pre-formatted context excerpts.
 
     Args:
         question: User's question
-        context_papers: List of paper dictionaries with metadata and text
+        context: Pre-formatted excerpt string produced by the retrieval pipeline.
+                 Each excerpt is labeled [Paper N | Title | Section].
 
     Returns:
         Formatted prompt string
     """
-    context_parts = []
+    return f"""{_name_line(user_name)}You are a research assistant answering questions about academic papers.
 
-    for i, paper in enumerate(context_papers, 1):
-        title = paper.get("title", "Untitled")
-        authors = paper.get("authors", "Unknown")
-        year = paper.get("year", "N/A")
-        lemma_id = paper.get("id", "")
-        text = paper.get("text", "")
+Use ONLY the excerpts below to answer. Each excerpt is labeled with its paper number and section.
 
-        context_parts.append(
-            f"[Paper {i} | MAVYN id: {lemma_id}]\n"
-            f"Title: {title}\n"
-            f"Authors: {authors}\n"
-            f"Year: {year}\n"
-            f"Content: {text[:6000]}\n"  # Limit to avoid token overflow
-        )
-
-    context = "\n\n".join(context_parts)
-
-    prompt = f"""You are a research assistant helping to answer questions about academic papers.
-
-Based on the following papers, answer the question below. When the user names a MAVYN id (e.g. "paper 9"), use the block with that MAVYN id. Cite specific papers when relevant.
-
-Papers:
 {context}
 
 Question: {question}
 
-Provide a clear, concise answer based on the information in the papers above. If the papers don't contain enough information to answer the question, say so."""
+Instructions:
+- Answer directly from the excerpts. Do not use outside knowledge.
+- Cite inline as [Paper N] each time you draw from a specific excerpt.
+- If no excerpt is relevant to the question, say so clearly.
+- In your References at the end, list ONLY papers you actually cited inline — not every paper shown above.
 
-    return prompt
+Answer:"""
 
 
 def build_similar_papers_prompt(
@@ -82,34 +87,83 @@ Instructions:
 Answer:"""
 
 
-def build_summary_prompt(paper: Dict[str, Any], max_length: int = 200) -> str:
-    """Build a prompt for summarizing a paper.
+def build_section_missing_prompt(context: str, title: str, section_name: str) -> str:
+    """Prompt used when the requested section was not found in stored chunks.
+
+    Asks the LLM to acknowledge the missing section and still summarise the
+    full paper, flagging any content that touches on the requested section.
 
     Args:
-        paper: Paper dictionary with metadata and text
-        max_length: Maximum words in summary
+        context: Full-paper excerpt from StructuredExtractor.
+        title: Paper title.
+        section_name: The section the user asked for but was not found.
 
     Returns:
         Formatted prompt string
     """
-    title = paper.get("title", "Untitled")
-    text = paper.get("text", "")
+    display = section_name.title()
+    return f"""The user asked for the {display} section of "{title}", but that specific section could not be located in the stored content.
 
-    prompt = f"""Summarize the following academic paper in approximately {max_length} words.
+Below are structured excerpts from the rest of the paper:
 
-Title: {title}
+{context}
 
-Content:
-{text[:5000]}
+Please respond in two parts:
+1. **Section not found**: One sentence noting the {display} section was not found in this paper's stored content.
+2. **Paper summary**: Provide a concise summary (200–300 words) of the full paper based on the excerpts above, and highlight any content that touches on {display.lower()}-related information if present.
 
-Provide a concise summary covering:
-1. Main contribution/finding
-2. Methodology (if applicable)
-3. Key results or implications
+Response:"""
+
+
+def build_section_summary_prompt(context: str, title: str, section_name: str) -> str:
+    """Build a prompt to summarise one specific section of a paper.
+
+    Args:
+        context: Pre-formatted excerpt from the target section (AlignedExtractor).
+        title: Paper title.
+        section_name: Canonical section key (e.g. 'results', 'methodology').
+
+    Returns:
+        Formatted prompt string
+    """
+    display = section_name.title()
+    return f"""Summarise the {display} section of "{title}" using the excerpt below.
+
+{context}
+
+Write a focused summary (150–250 words) covering only this section.
+Highlight the key points, findings, or arguments it presents.
+Use only information from the excerpt. Do not invent details.
 
 Summary:"""
 
-    return prompt
+
+def build_summary_prompt(
+    context: str, title: str, user_name: Optional[str] = None
+) -> str:
+    """Build a summarisation prompt from pre-formatted section excerpts.
+
+    Args:
+        context: Pre-formatted section excerpt string from StructuredExtractor.
+        title: Paper title (used in the instruction header).
+
+    Returns:
+        Formatted prompt string
+    """
+    return f"""{_name_line(user_name)}Summarise the paper "{title}" using the structured section excerpts below.
+Each excerpt is labeled with its section name.
+
+{context}
+
+Write a coherent summary (250–350 words) covering:
+1. Problem and motivation
+2. Proposed approach or method
+3. Key results and findings
+4. Conclusions and implications
+
+Use only information from the excerpts. Do not invent details.
+
+Summary:"""
 
 
 def build_citation_extraction_prompt(text: str) -> str:

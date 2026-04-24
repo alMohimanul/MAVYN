@@ -47,7 +47,40 @@ def has_api_keys() -> bool:
                     if key_value and not key_value.startswith("your_"):
                         return True
 
+    # Check if Ollama is running locally (no API key needed)
+    try:
+        import httpx
+
+        host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+        with httpx.Client() as client:
+            resp = client.get(f"{host}/api/tags", timeout=2.0)
+            if resp.status_code == 200:
+                return True
+    except Exception:
+        pass
+
     return False
+
+
+def save_config_value(key: str, value: str) -> None:
+    """Save an arbitrary key=value to ~/.MAVYN/.env."""
+    env_file = get_env_file()
+    existing = env_file.read_text().split("\n") if env_file.exists() else []
+    line = f"{key}={value}"
+    updated = False
+    for i, ln in enumerate(existing):
+        if ln.startswith(f"{key}="):
+            existing[i] = line
+            updated = True
+            break
+    if not updated:
+        existing.append(line)
+    env_file.write_text("\n".join(existing))
+
+
+def get_user_name() -> str:
+    """Return the stored user name, or empty string if not set."""
+    return os.getenv("MAVYN_USER_NAME", "").strip()
 
 
 def save_api_key(provider: str, api_key: str) -> None:
@@ -116,15 +149,27 @@ def run_setup_wizard(skip_if_configured: bool = True) -> None:
     console.print("     Get your key: https://console.groq.com/")
     console.print("  2. [blue]Google Gemini[/blue] (alternative option)")
     console.print("     Get your key: https://makersuite.google.com/")
-    console.print("  3. [dim]Skip for now[/dim]")
+    console.print("  3. [magenta]Ollama[/magenta] (local, no API key needed)")
+    console.print("     Install: https://ollama.com  |  Run: ollama serve")
+    console.print("  4. [dim]Skip for now[/dim]")
     console.print()
 
-    choice = Prompt.ask("Enter choice", choices=["1", "2", "3"], default="1")
+    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4"], default="1")
 
-    if choice == "3":
+    if choice == "4":
         console.print("\n[yellow]Skipping API key setup.[/yellow]")
         console.print(
             "You can add API keys later by running: [cyan]lemma setup[/cyan]\n"
+        )
+        get_env_file().touch()
+        return
+
+    if choice == "3":
+        console.print("\n[green]Ollama selected.[/green]")
+        console.print(
+            "Make sure Ollama is running: [cyan]ollama serve[/cyan]\n"
+            "Default model: llama3.2  (override with OLLAMA_MODEL env var)\n"
+            "Default host:  http://localhost:11434  (override with OLLAMA_HOST env var)\n"
         )
         get_env_file().touch()
         return
@@ -153,6 +198,13 @@ def run_setup_wizard(skip_if_configured: bool = True) -> None:
         backup_key = Prompt.ask(f"Enter your {backup_name} API key", password=True)
         if backup_key and backup_key.strip():
             save_api_key(backup_provider, backup_key.strip())
+
+    # Ask for user name (only if not already set)
+    if not get_user_name():
+        console.print()
+        name = Prompt.ask("What should MAVYN call you?", default="").strip()
+        if name:
+            save_config_value("MAVYN_USER_NAME", name)
 
     console.print()
     console.print("[bold green]✓ Setup complete![/bold green]")

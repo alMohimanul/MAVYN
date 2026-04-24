@@ -326,6 +326,91 @@ class Repository:
                 .all()
             )
 
+    def get_chunks_by_ids(self, chunk_ids: List[Tuple[int, int]]) -> List[Embedding]:
+        """Fetch specific chunks by (paper_id, chunk_index) pairs.
+
+        Args:
+            chunk_ids: List of (paper_id, chunk_index) tuples
+
+        Returns:
+            List of matching Embedding objects
+        """
+        if not chunk_ids:
+            return []
+        with self.get_session() as session:
+            conditions = [
+                (Embedding.paper_id == pid) & (Embedding.chunk_index == cidx)
+                for pid, cidx in chunk_ids
+            ]
+            return (
+                session.query(Embedding)
+                .filter(or_(*conditions), Embedding.is_valid.is_(True))
+                .all()
+            )
+
+    def search_chunks_by_keywords(
+        self,
+        keywords: List[str],
+        paper_ids: Optional[List[int]] = None,
+        limit: int = 20,
+    ) -> List[Embedding]:
+        """Find chunks whose text contains any of the given keywords (SQL grep).
+
+        Args:
+            keywords: Terms to search for (case-insensitive LIKE)
+            paper_ids: Optional filter — restrict search to these papers
+            limit: Maximum results to return
+
+        Returns:
+            Matching Embedding objects, ordered by importance_score descending
+        """
+        if not keywords:
+            return []
+        with self.get_session() as session:
+            kw_conditions = [
+                Embedding.text_content.ilike(f"%{kw}%") for kw in keywords[:8]
+            ]
+            q = session.query(Embedding).filter(
+                Embedding.is_valid.is_(True),
+                Embedding.text_content.isnot(None),
+                or_(*kw_conditions),
+            )
+            if paper_ids:
+                q = q.filter(Embedding.paper_id.in_(paper_ids))
+            return q.order_by(Embedding.importance_score.desc()).limit(limit).all()
+
+    def get_chunks_by_type(
+        self,
+        paper_id: int,
+        chunk_types: List[str],
+        limit: int = 3,
+    ) -> List[Embedding]:
+        """Fetch chunks of specific types for a paper (e.g. abstract, introduction).
+
+        Args:
+            paper_id: Paper ID
+            chunk_types: List of chunk_type values to include
+            limit: Maximum results
+
+        Returns:
+            Matching chunks ordered by importance_score desc
+        """
+        if not chunk_types:
+            return []
+        with self.get_session() as session:
+            return (
+                session.query(Embedding)
+                .filter(
+                    Embedding.paper_id == paper_id,
+                    Embedding.is_valid.is_(True),
+                    Embedding.text_content.isnot(None),
+                    or_(*[Embedding.chunk_type == ct for ct in chunk_types]),
+                )
+                .order_by(Embedding.importance_score.desc(), Embedding.chunk_index)
+                .limit(limit)
+                .all()
+            )
+
     # Citation operations
     def add_citation(
         self,

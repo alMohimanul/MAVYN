@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ..utils.logger import get_logger
 from . import prompts
 from .question_parser import find_common_sections
+from ..embeddings.retrieval import AlignedExtractor
 
 logger = get_logger(__name__)
 
@@ -90,24 +91,18 @@ class ComparisonEngine:
         papers = self.repo.get_papers_by_ids(paper_ids)
         papers_metadata = [self._paper_to_dict(p) for p in papers]
 
-        # Get section embeddings for each paper
+        # Get section text for each paper (importance-sorted, token-budgeted)
+        aligned = AlignedExtractor(self.repo)
         papers_content = []
         for paper in papers:
-            section_embeddings = self.repo.get_section_embeddings(
-                paper.id, section_name
+            section_text = aligned.extract_section_text(
+                paper.id, section_name, token_budget=600
             )
-
-            if not section_embeddings:
+            if not section_text:
                 logger.warning(
                     f"No embeddings found for section '{section_name}' in paper {paper.id}"
                 )
                 section_text = f"[Section '{section_name}' not found in this paper]"
-            else:
-                # Combine embedding text chunks
-                chunks = [
-                    emb.text_content for emb in section_embeddings if emb.text_content
-                ]
-                section_text = " ".join(chunks[:10])  # Limit to first 10 chunks
 
             papers_content.append(
                 {
@@ -115,7 +110,7 @@ class ComparisonEngine:
                     "title": paper.title or "Untitled",
                     "authors": paper.authors or "Unknown",
                     "year": paper.year or "N/A",
-                    "content": section_text[:1500],  # Limit to 1500 chars per paper
+                    "content": section_text,
                 }
             )
 
@@ -223,20 +218,14 @@ class ComparisonEngine:
         for section in common_sections:
             logger.debug(f"Processing section: {section}")
 
-            # Get section content for all papers
+            # Get section content for all papers (importance-sorted, token-budgeted)
+            aligned = AlignedExtractor(self.repo)
             papers_content = []
             for paper in papers:
-                # Get section embeddings
-                section_embeddings = self.repo.get_section_embeddings(paper.id, section)
-
-                if section_embeddings:
-                    chunks = [
-                        emb.text_content
-                        for emb in section_embeddings
-                        if emb.text_content
-                    ]
-                    section_text = " ".join(chunks[:8])  # Limit chunks
-                else:
+                section_text = aligned.extract_section_text(
+                    paper.id, section, token_budget=550
+                )
+                if not section_text:
                     section_text = "[Section not found]"
 
                 papers_content.append(
@@ -245,7 +234,7 @@ class ComparisonEngine:
                         "title": paper.title or "Untitled",
                         "authors": paper.authors or "Unknown",
                         "year": paper.year or "N/A",
-                        "content": section_text[:1200],  # Limit per paper
+                        "content": section_text,
                     }
                 )
 

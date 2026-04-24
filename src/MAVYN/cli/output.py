@@ -1,9 +1,47 @@
 """Output formatting helpers for CLI."""
+import random
 from typing import List, Optional
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+
+# Status verbs shown during search and generation steps
+_SEARCH_VERBS = [
+    "Scanning",
+    "Navigating",
+    "Excavating",
+    "Triangulating",
+    "Surfacing",
+    "Mapping",
+    "Tracing",
+    "Sifting",
+]
+_THINK_VERBS = [
+    "Thinking",
+    "Architecting",
+    "Beaming",
+    "Billowing",
+    "Levitating",
+    "Osmosing",
+    "Moonwalking",
+    "Crystallising",
+    "Weaving",
+    "Conjuring",
+    "Distilling",
+    "Dreaming",
+]
+
+
+def random_status(category: str = "think") -> str:
+    """Return a random status verb for progress spinners.
+
+    Args:
+        category: 'think' for generation steps, 'search' for retrieval steps.
+    """
+    pool = _THINK_VERBS if category == "think" else _SEARCH_VERBS
+    return random.choice(pool) + "..."
+
 
 console = Console()
 

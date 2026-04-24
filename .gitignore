@@ -18,12 +18,18 @@ dist/
 *.egg-info/
 .eggs/
 
-# IDE
+# IDE and local tooling
 .vscode/
 .idea/
+.cursor/
+.claude/
 *.swp
 *.swo
 *~
+
+# Type checker cache
+.mypy_cache/
+.ruff_cache/
 
 # MAVYN-specific
 .MAVYN/
