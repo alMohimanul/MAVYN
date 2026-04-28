@@ -73,6 +73,26 @@ def thinking_spinner():
 console = Console()
 
 
+@contextmanager
+def thinking_spinner():
+    """Single in-place animated spinner with cycling random verbs."""
+    stop = threading.Event()
+    with console.status(
+        f"[bold cyan]{random_status('think')}[/bold cyan]", spinner="dots"
+    ) as status:
+
+        def _cycle():
+            while not stop.wait(1.5):
+                status.update(f"[bold cyan]{random_status('think')}[/bold cyan]")
+
+        t = threading.Thread(target=_cycle, daemon=True)
+        t.start()
+        try:
+            yield
+        finally:
+            stop.set()
+
+
 def print_success(message: str) -> None:
     """Print a success message."""
     console.print(f"[green]✓[/green] {message}")
