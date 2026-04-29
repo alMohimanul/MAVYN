@@ -757,10 +757,6 @@ def ask(
 
                 if save:
                     _save_note_from_session(repo, session_data)
-                else:
-                    output.print_info(
-                        "\n💡 Tip: Answers are automatically saved in your session"
-                    )
             except Exception as e:
                 output.print_error(f"Failed to generate answer: {e}")
             return
@@ -791,7 +787,26 @@ def ask(
             HybridRetriever,
             StructuredExtractor,
             TaskRouter,
+            get_context_budget,
+            get_response_budget,
         )
+
+        # Init LLM router early so we can size the context budget to the model
+        # before retrieval — avoids wasting tokens or hitting context limits.
+        llm_router = LLMRouter(rate_store=RateLimitStore(), cache_enabled=True)
+        llm_cache = LLMCache(repo)
+
+        if not llm_router.is_available():
+            output.print_error(
+                "No LLM providers available. Please set up API keys:\n"
+                "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY\n"
+                "  — or run a local Ollama server: ollama serve"
+            )
+            return
+
+        _preferred_model = llm_router.preferred_model("light")
+        _ctx_budget = get_context_budget(_preferred_model)
+        _resp_budget = get_response_budget(_preferred_model)
 
         # Detect task type before touching FAISS (summarize skips it entirely)
         _preview_ids = extract_paper_ids(question)
@@ -819,7 +834,7 @@ def ask(
                     f"Extracting {task_section} section...", total=None
                 )
                 section_text = AlignedExtractor(repo).extract_section_text(
-                    _pid, task_section, token_budget=1000
+                    _pid, task_section, token_budget=_ctx_budget
                 )
                 progress.update(task, completed=True)
 
@@ -828,7 +843,7 @@ def ask(
                 # Section missing: build full-paper context so the LLM can
                 # acknowledge the gap and still provide a useful summary
                 context_str, included_ids = StructuredExtractor(repo).extract(
-                    _pid, _paper_obj
+                    _pid, _paper_obj, token_budget=_ctx_budget
                 )
                 task_section = task_section + ":missing"  # signal to prompt dispatch
                 output.print_info(
@@ -857,7 +872,7 @@ def ask(
             ) as progress:
                 task = progress.add_task("Extracting paper structure...", total=None)
                 context_str, included_ids = StructuredExtractor(repo).extract(
-                    _pid, _paper_obj
+                    _pid, _paper_obj, token_budget=_ctx_budget
                 )
                 progress.update(task, completed=True)
 
@@ -935,6 +950,7 @@ def ask(
                         query_vector=query_vector,
                         top_k=top_k,
                         pinned_paper_ids=valid_explicit if valid_explicit else None,
+                        token_budget=_ctx_budget,
                     )
                     progress.update(task, completed=True)
             except Exception as e:
@@ -958,32 +974,6 @@ def ask(
             }
             for p in included_papers
         ]
-
-        # Initialize LLM router and cache
-        llm_router = LLMRouter(rate_store=RateLimitStore(), cache_enabled=True)
-        llm_cache = LLMCache(repo)
-
-        # Check if LLM is available
-        if not llm_router.is_available():
-            output.print_error(
-                "No LLM providers available. Please set up API keys:\n"
-                "  GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY\n"
-                "  — or run a local Ollama server: ollama serve"
-            )
-            output.print_info("\nShowing relevant papers instead:")
-            output.print_paper_table(
-                [
-                    {
-                        "id": p["id"],
-                        "title": p["title"],
-                        "authors": p["authors"],
-                        "year": p["year"],
-                        "embedding_status": "completed",
-                    }
-                    for p in context_papers
-                ]
-            )
-            return
 
         # Build prompt and generate answer
         try:
@@ -1011,6 +1001,7 @@ def ask(
             with output.thinking_spinner():
                 response = llm_router.generate(
                     prompt=prompt,
+                    max_tokens=_resp_budget,
                     cache_lookup=llm_cache.get,
                     cache_store=llm_cache.store,
                 )
@@ -1053,10 +1044,6 @@ def ask(
             # Auto-save note if --save flag is set
             if save:
                 _save_note_from_session(repo, session_data)
-            else:
-                output.print_info(
-                    "\n💡 Tip: Answers are automatically saved in your session"
-                )
 
         except Exception as e:
             output.print_error(f"Failed to generate answer: {e}")
@@ -2066,6 +2053,114 @@ def sync(
 
             except Exception as e:
                 output.print_error(f"Sync failed: {e}")
+
+
+@cli.command()
+@click.option("--db", default="~/.MAVYN/MAVYN.db", help="Database path")
+@click.option(
+    "--all",
+    "all_papers",
+    is_flag=True,
+    help="Generate profiles for all papers missing one",
+)
+@click.argument("paper_id", required=False, type=int)
+def profile(db: str, all_papers: bool, paper_id: Optional[int]):
+    """Generate pre-computed paper profiles to speed up literature reviews.
+
+    Profiles are generated once at index time from full-paper content and reused
+    across literature reviews, Q&A, and comparisons — saving Groq API calls.
+
+    \b
+    lemma profile --all        Generate profiles for all papers missing one
+    lemma profile 3            (Re)generate profile for paper 3
+    """
+    from ..llm.providers import LLMRouter
+    from ..llm.rate_limits import RateLimitStore
+    from ..embeddings.retrieval import StructuredExtractor, get_context_budget
+    from ..llm import prompts
+
+    with Repository(db) as repo:
+        llm_router = LLMRouter(rate_store=RateLimitStore(), cache_enabled=False)
+        if not llm_router.is_available():
+            output.print_error(
+                "No LLM provider available. Set GROQ_API_KEY to generate profiles."
+            )
+            return
+
+        if paper_id is not None:
+            targets = [repo.get_paper_by_id(paper_id)]
+            targets = [p for p in targets if p]
+            if not targets:
+                output.print_error(f"Paper {paper_id} not found.")
+                return
+        elif all_papers:
+            all_ps = repo.list_papers(limit=10000)
+            targets = [p for p in all_ps if not repo.get_paper_profile(p.id)]
+            if not targets:
+                output.print_success("All papers already have profiles.")
+                return
+        else:
+            output.print_info(
+                "Specify --all or a paper_id. Run 'lemma profile --help'."
+            )
+            return
+
+        output.print_info(f"Generating profiles for {len(targets)} paper(s)...")
+        preferred = llm_router.preferred_model("light")
+        ctx_budget = get_context_budget(preferred)
+
+        ok = 0
+        for i, paper in enumerate(targets, 1):
+            title = paper.title or "Untitled"
+            output.print_info(f"  [{i}/{len(targets)}] {title[:60]}")
+            try:
+                context_str, _ = StructuredExtractor(repo).extract(
+                    paper.id, paper, token_budget=ctx_budget
+                )
+                if not context_str.strip():
+                    output.print_warning(
+                        "    No chunks found — run 'lemma embed' first."
+                    )
+                    continue
+
+                prompt = prompts.build_paper_profile_prompt(
+                    title=title,
+                    authors=paper.authors or "Unknown",
+                    year=str(paper.year or "n.d."),
+                    context=context_str,
+                )
+                response = llm_router.generate(
+                    prompt=prompt, max_tokens=800, tier="light"
+                )
+                if not response:
+                    output.print_warning("    LLM returned no response.")
+                    continue
+
+                parsed = prompts.parse_paper_profile(response.text)
+                full_summary = (
+                    parsed.get("summary", "").strip() or response.text.strip()[:600]
+                )
+
+                repo.upsert_paper_profile(
+                    paper.id,
+                    {
+                        "problem_statement": parsed.get("problem", ""),
+                        "methodology_summary": parsed.get("methodology", ""),
+                        "key_findings": parsed.get("findings", ""),
+                        "contributions": parsed.get("contributions", ""),
+                        "limitations": parsed.get("limitations", ""),
+                        "full_summary": full_summary,
+                        "provider": response.provider,
+                        "model": response.model,
+                        "content_version": paper.content_version,
+                    },
+                )
+                ok += 1
+                output.print_success("    Profile saved.")
+            except Exception as e:
+                output.print_error(f"    Failed: {e}")
+
+        output.print_success(f"\nDone: {ok}/{len(targets)} profiles generated.")
 
 
 @cli.command()

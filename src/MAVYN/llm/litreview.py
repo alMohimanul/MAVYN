@@ -38,31 +38,44 @@ class LiteratureReviewEngine:
             if progress_cb:
                 progress_cb(msg)
 
-        # ── Step 1: Per-paper summaries (light tier) ──────────────────────
+        # ── Step 1: Per-paper summaries — profile cache first ─────────────
+        # If a pre-computed PaperProfile exists, use its full_summary directly
+        # (0 LLM calls). Only fall back to on-demand summarization when missing.
         paper_summaries = []
         for i, paper in enumerate(papers, 1):
-            notify(
-                f"Summarizing paper {i}/{len(papers)}: {paper.title or 'Untitled'}..."
-            )
-            abstract = self._get_abstract(paper)
-            prompt = prompts.build_litreview_paper_summary_prompt(
-                title=paper.title or "Untitled",
-                authors=paper.authors or "Unknown",
-                year=str(paper.year or "n.d."),
-                abstract=abstract,
-            )
-            response = self.llm_router.generate(
-                prompt=prompt, max_tokens=800, tier="light"
-            )
+            profile = None
+            try:
+                profile = self.repo.get_paper_profile(paper.id)
+            except Exception:
+                pass
+
+            if profile and profile.full_summary:
+                summary_text = profile.full_summary
+            else:
+                notify(
+                    f"Summarizing paper {i}/{len(papers)}: {paper.title or 'Untitled'}..."
+                )
+                abstract = self._get_abstract(paper)
+                prompt = prompts.build_litreview_paper_summary_prompt(
+                    title=paper.title or "Untitled",
+                    authors=paper.authors or "Unknown",
+                    year=str(paper.year or "n.d."),
+                    abstract=abstract,
+                )
+                response = self.llm_router.generate(
+                    prompt=prompt, max_tokens=800, tier="light"
+                )
+                summary_text = (
+                    response.text.strip() if response else "[Summary unavailable]"
+                )
+
             paper_summaries.append(
                 {
                     "id": paper.id,
                     "title": paper.title or "Untitled",
                     "authors": paper.authors or "Unknown",
                     "year": str(paper.year or "n.d."),
-                    "summary": response.text.strip()
-                    if response
-                    else "[Summary unavailable]",
+                    "summary": summary_text,
                 }
             )
 

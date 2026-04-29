@@ -61,6 +61,12 @@ class Paper(Base):
     processing_logs = relationship(
         "ProcessingLog", back_populates="paper", cascade="all, delete-orphan"
     )
+    profile = relationship(
+        "PaperProfile",
+        back_populates="paper",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<Paper(id={self.id}, title='{self.title[:50]}...', year={self.year})>"
@@ -293,3 +299,37 @@ class ConversationTurn(Base):
 
     def __repr__(self):
         return f"<ConversationTurn(id={self.id}, session_id='{self.session_id}', turn={self.turn_number}, question='{self.question[:30]}...')>"
+
+
+class PaperProfile(Base):
+    """Pre-computed structured profile for a paper — generated once at index time."""
+
+    __tablename__ = "paper_profiles"
+
+    id = Column(Integer, primary_key=True)
+    paper_id = Column(
+        Integer, ForeignKey("papers.id"), nullable=False, unique=True, index=True
+    )
+
+    # Structured fields extracted from full-paper context
+    problem_statement = Column(Text)
+    methodology_summary = Column(Text)
+    key_findings = Column(Text)
+    contributions = Column(Text)
+    limitations = Column(Text)
+
+    # Prose summary used as drop-in for literature review Step 1 (saves N LLM calls)
+    full_summary = Column(Text, nullable=False)
+
+    # Provenance
+    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    provider = Column(String(32))
+    model = Column(String(64))
+    content_version = Column(
+        Integer, nullable=False
+    )  # paper.content_version when generated
+
+    paper = relationship("Paper", back_populates="profile")
+
+    def __repr__(self):
+        return f"<PaperProfile(paper_id={self.paper_id}, generated_at={self.generated_at})>"

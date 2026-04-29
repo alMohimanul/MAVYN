@@ -580,3 +580,62 @@ Write a Conclusion (250–350 words) that:
 Write in formal academic prose. Do not introduce new citations.
 
 CONCLUSION:"""
+
+
+def build_paper_profile_prompt(
+    title: str, authors: str, year: str, context: str
+) -> str:
+    """Prompt to generate a structured paper profile from full-paper context.
+
+    context: output of StructuredExtractor.extract() — covers all major sections.
+    The profile is stored once at index time and reused across lit reviews, Q&A, etc.
+    """
+    return f"""Index this research paper for future retrieval and literature review.
+
+Paper: "{title}"
+Authors: {authors} ({year})
+
+Full-paper content (structured by section):
+{context}
+
+Generate a structured profile with exactly these six labeled fields:
+
+PROBLEM: [1-2 sentences — what specific problem or gap does this paper address?]
+
+METHODOLOGY: [2-3 sentences — what approach, model, framework, or experiment do they use? Include key technical names.]
+
+FINDINGS: [2-3 sentences — what are the main results? Include numbers, comparisons, or performance metrics if stated.]
+
+CONTRIBUTIONS: [1-2 sentences — what does this work add to the field that was not there before?]
+
+LIMITATIONS: [1-2 sentences — what do the authors acknowledge as limitations, or what is clearly absent?]
+
+SUMMARY: [A 150-200 word prose paragraph synthesizing the above for use in an academic literature review.]
+
+Use only information from the content above. Do not invent details.
+
+PROFILE:"""
+
+
+def parse_paper_profile(raw: str) -> dict:
+    """Extract the six labeled fields from a paper profile LLM response."""
+    import re as _re
+
+    fields = [
+        "PROBLEM",
+        "METHODOLOGY",
+        "FINDINGS",
+        "CONTRIBUTIONS",
+        "LIMITATIONS",
+        "SUMMARY",
+    ]
+    result: dict = {}
+    for i, field in enumerate(fields):
+        next_field = fields[i + 1] if i + 1 < len(fields) else None
+        if next_field:
+            pattern = rf"{field}:\s*(.*?)\s*(?={next_field}:)"
+        else:
+            pattern = rf"{field}:\s*(.*?)$"
+        m = _re.search(pattern, raw, _re.DOTALL | _re.IGNORECASE)
+        result[field.lower()] = m.group(1).strip() if m else ""
+    return result

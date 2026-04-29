@@ -137,9 +137,9 @@ class PaperChunker:
     def __init__(
         self,
         strategy: ChunkingStrategy = ChunkingStrategy.HYBRID,
-        target_chunk_size: int = 300,  # tokens
-        overlap_size: int = 50,  # tokens
-        max_chunk_size: int = 400,  # tokens (hard limit)
+        target_chunk_size: int = 600,  # tokens
+        overlap_size: int = 100,  # tokens
+        max_chunk_size: int = 900,  # tokens (hard limit)
     ):
         """Initialize chunker with strategy and parameters.
 
