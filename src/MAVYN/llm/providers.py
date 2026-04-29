@@ -83,17 +83,20 @@ class GroqProvider(LLMProvider):
                 temperature=0.7,
                 top_p=1,
                 stream=True,
+                stream_options={"include_usage": True},
             )
             full_response = ""
+            tokens_used = 0
             for chunk in completion:
-                content = chunk.choices[0].delta.content
-                if content:
-                    full_response += content
+                if chunk.choices and chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                if hasattr(chunk, "usage") and chunk.usage:
+                    tokens_used = chunk.usage.total_tokens
             return LLMResponse(
                 text=full_response,
                 provider="groq",
                 model=self.model,
-                tokens_used=0,
+                tokens_used=tokens_used,
             )
         except Exception as e:
             err = str(e)
@@ -337,6 +340,20 @@ class LLMRouter:
             "No LLM providers available. Please configure GROQ_API_KEY, GEMINI_API_KEY, "
             "or OPENROUTER_API_KEY — or start a local Ollama server (ollama serve)"
         )
+
+    def preferred_model(self, tier: str = "light") -> str:
+        """Return the first available Groq model for the given tier.
+
+        Used to pick a model name *before* making a generate call, so callers
+        can size their context budget to match the actual model's context window.
+        Falls back to the last model in the tier list if all are rate-limited.
+        """
+        models = self.HEAVY_MODELS if tier == "heavy" else self.LIGHT_MODELS
+        if self._groq_api_key():
+            for m in models:
+                if self.rate_store.is_available(m):
+                    return m
+        return models[-1]
 
     def is_available(self) -> bool:
         if self._groq_api_key():

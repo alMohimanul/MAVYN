@@ -15,11 +15,35 @@ from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ── Token budget constants ────────────────────────────────────────────────────
+# ── Model context window registry ────────────────────────────────────────────
 
-TOKEN_BUDGET_QA = 2500
-TOKEN_BUDGET_SUMMARY = 2200
-TOKEN_BUDGET_COMPARE_PER = 650  # per paper per section
+MODEL_CONTEXT_WINDOWS: Dict[str, int] = {
+    "meta-llama/llama-4-scout-17b-16e-instruct": 128_000,
+    "openai/gpt-oss-120b": 128_000,
+    "compound-beta": 8_192,
+    "compound-beta-mini": 8_192,
+}
+_DEFAULT_CONTEXT_WINDOW = 4_096
+_INPUT_FRACTION = 0.60  # 60% of context window for retrieved content
+_RESPONSE_FRACTION = 0.30  # 30% reserved for model response; 10% headroom
+
+
+def get_context_budget(model_name: str) -> int:
+    """Return the input token budget for retrieved context given a model."""
+    window = MODEL_CONTEXT_WINDOWS.get(model_name, _DEFAULT_CONTEXT_WINDOW)
+    return int(window * _INPUT_FRACTION)
+
+
+def get_response_budget(model_name: str) -> int:
+    """Return how many tokens to allocate for the model's response."""
+    window = MODEL_CONTEXT_WINDOWS.get(model_name, _DEFAULT_CONTEXT_WINDOW)
+    return int(window * _RESPONSE_FRACTION)
+
+
+# Backwards-compatible aliases (derived from the registry fallback)
+TOKEN_BUDGET_QA = get_context_budget("compound-beta")  # 4915
+TOKEN_BUDGET_SUMMARY = get_context_budget("compound-beta")  # 4915
+TOKEN_BUDGET_COMPARE_PER = 1_500  # per paper per section
 
 # ── Stopwords (for keyword extraction) ───────────────────────────────────────
 
@@ -172,17 +196,17 @@ _SUMMARY_ORDER = [
     "background",
 ]
 _SUMMARY_BUDGETS: Dict[str, int] = {
-    "abstract": 350,
-    "introduction": 200,
-    "conclusion": 200,
-    "results": 220,
-    "discussion": 150,
-    "methods": 150,
-    "methodology": 150,
-    "experiment": 150,
-    "related": 80,
-    "background": 80,
-    "_other": 60,
+    "abstract": 700,
+    "introduction": 400,
+    "conclusion": 400,
+    "results": 450,
+    "discussion": 300,
+    "methods": 300,
+    "methodology": 300,
+    "experiment": 300,
+    "related": 160,
+    "background": 160,
+    "_other": 120,
 }
 
 # ── Text helpers ──────────────────────────────────────────────────────────────
@@ -348,6 +372,7 @@ class HybridRetriever:
         query_vector,
         top_k: int = 8,
         pinned_paper_ids: Optional[List[int]] = None,
+        token_budget: int = TOKEN_BUDGET_QA,
     ) -> Tuple[str, List[int]]:
         """Return (context_string, included_paper_ids)."""
         # ── Stage 1: Dense retrieval ──────────────────────────────────────────
@@ -437,7 +462,7 @@ class HybridRetriever:
             }
             for p in papers
         }
-        return pack_context(excerpts, paper_meta, TOKEN_BUDGET_QA)
+        return pack_context(excerpts, paper_meta, token_budget)
 
 
 # ── Structured Extractor (Summarize) ──────────────────────────────────────────
@@ -460,7 +485,9 @@ class StructuredExtractor:
                 return key
         return "_other"
 
-    def extract(self, paper_id: int, paper_obj) -> Tuple[str, List[int]]:
+    def extract(
+        self, paper_id: int, paper_obj, token_budget: int = TOKEN_BUDGET_SUMMARY
+    ) -> Tuple[str, List[int]]:
         """Return (context_string, [paper_id])."""
         chunks = self.repo.get_embeddings_by_paper(paper_id)
         valid = [c for c in chunks if c.is_valid and c.text_content]
@@ -500,7 +527,7 @@ class StructuredExtractor:
                 continue
 
             cost = estimate_tokens(text) + 5
-            if used + cost > TOKEN_BUDGET_SUMMARY:
+            if used + cost > token_budget:
                 break
 
             display = section_chunks[0].section_name or section_key.title()

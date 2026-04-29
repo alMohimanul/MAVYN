@@ -21,6 +21,7 @@ from .models import (
     Note,
     PaperComparison,
     ArxivQueryCache,
+    PaperProfile,
 )
 from ..utils.logger import get_logger, log_exception
 from ..integrations.arxiv_client import normalize_arxiv_id
@@ -1511,3 +1512,50 @@ class Repository:
             except SQLAlchemyError as e:
                 log_exception(logger, "Failed to get session papers", e)
                 return []
+
+    def get_paper_profile(self, paper_id: int) -> Optional[PaperProfile]:
+        """Return the profile for a paper if it exists and is not stale."""
+        with self.get_session() as session:
+            try:
+                paper = session.query(Paper).filter(Paper.id == paper_id).first()
+                profile = (
+                    session.query(PaperProfile)
+                    .filter(PaperProfile.paper_id == paper_id)
+                    .first()
+                )
+                if (
+                    profile
+                    and paper
+                    and profile.content_version < paper.content_version
+                ):
+                    return None  # stale — regenerate
+                return profile
+            except SQLAlchemyError as e:
+                log_exception(logger, "Failed to get paper profile", e)
+                return None
+
+    def upsert_paper_profile(
+        self, paper_id: int, fields: dict
+    ) -> Optional[PaperProfile]:
+        """Insert or replace the profile for a paper."""
+        with self.get_session() as session:
+            try:
+                existing = (
+                    session.query(PaperProfile)
+                    .filter(PaperProfile.paper_id == paper_id)
+                    .first()
+                )
+                if existing:
+                    for k, v in fields.items():
+                        setattr(existing, k, v)
+                    profile = existing
+                else:
+                    profile = PaperProfile(paper_id=paper_id, **fields)
+                    session.add(profile)
+                session.commit()
+                session.refresh(profile)
+                return profile
+            except SQLAlchemyError as e:
+                log_exception(logger, "Failed to upsert paper profile", e)
+                session.rollback()
+                return None
